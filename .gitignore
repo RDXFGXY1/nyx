@@ -1,0 +1,43 @@
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Node / web extension artifacts
+node_modules/
+dist/
+build/
+coverage/
+
+# .NET backend build outputs
+backend/**/bin/
+backend/**/obj/
+backend/.vs/
+backend/**/*.user
+backend/**/*.suo
+backend/**/*.userosscache
+backend/**/*.sln.docstates
+backend/**/*.pdb
+backend/**/*.cache
+backend/**/*.db
+backend/**/*.sqlite
+
+# Local environment files
+.env
+.env.*
+
+# Package archives
+*.zip
+*.tar
+*.gz

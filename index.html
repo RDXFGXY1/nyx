@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Tab</title>
+  
+  
+  
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="bg" id="bg"></div>
+  <video class="bg-video hidden" id="bgVideo" autoplay muted loop playsinline></video>
+  <div class="bg-overlay"></div>
+  <div class="mood-tint" id="moodTint"></div>
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <nav class="tabs" id="tabs"></nav>
+
+    <div class="topbar-right">
+      <button class="edit-btn" id="vaultOpenBtn" title="passwords — Alt+P" aria-label="password vault">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l2 2M14 9l2 2"/></svg>
+      </button>
+      <button class="edit-btn" id="stashOpenBtn" title="saved — Alt+S" aria-label="saved things">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
+      </button>
+      <button class="edit-btn" id="editBtn" title="edit links" aria-label="edit links">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 3 21l.5-4.5z"/></svg>
+      </button>
+      <div class="clock" id="clock" title="calendar">
+        <span class="time" id="time">--:--</span>
+        <span class="date" id="date">---</span>
+      </div>
+      <div class="weather" id="weather">
+        <span class="temp" id="temp">--°</span>
+        <span class="cond" id="cond">···</span>
+      </div>
+      <div class="cal-pop hidden" id="calPop"></div>
+    </div>
+  </header>
+
+  <!-- SEARCH -->
+  <div class="search-wrap">
+    <div id="searchForm" class="search">
+      <span class="search-mark">/</span>
+      <input id="searchInput" type="text" placeholder="search or type url" spellcheck="false" />
+      <span class="search-hint" id="engineHint">brave</span>
+    </div>
+    <div class="palette" id="palette"></div>
+  </div>
+
+  <!-- GRID OF LINK GROUPS -->
+  <main class="grid" id="grid"></main>
+
+  <!-- DASHBOARD (Alt+D) -->
+  <div class="dash hidden" id="dock">
+    <nav class="dash-tabs">
+      <button class="dash-tab active" data-pane="dashboard"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Dashboard</button>
+      <button class="dash-tab" data-pane="media"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Media</button>
+      <button class="dash-tab" data-pane="system"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>System</button>
+    </nav>
+
+    <div class="dash-body">
+    <!-- DASHBOARD -->
+    <div class="dash-pane" id="pane-dashboard">
+      <div class="dash-grid">
+        <div class="card card-weather">
+          <div class="w-row">
+            <span class="w-icon">☀</span>
+            <span class="w-temp" id="dashTemp">--°</span>
+          </div>
+          <div class="w-cond" id="dashCond">···</div>
+        </div>
+
+        <div class="card card-profile">
+          <img class="avatar" id="avatar" src="assets/avatar.png" alt="avatar" title="click to change" />
+          <div class="prof-rows">
+            <div class="prof-row"><span class="prof-k">◈</span><span id="profBrowser">Brave</span></div>
+            <div class="prof-row"><span class="prof-k">▤</span><span id="profOs">—</span></div>
+            <div class="prof-row"><span class="prof-k">◔</span><span id="profUp">up 0 minutes</span></div>
+          </div>
+        </div>
+
+        <div class="card card-date">
+          <div class="d-day" id="dashDay">--</div>
+          <div class="d-dots">• • •</div>
+          <div class="d-mon" id="dashMon">--</div>
+          <div class="d-wd" id="dashWd">—</div>
+        </div>
+
+        <div class="card card-cal" id="calendar"></div>
+
+        <div class="card card-media">
+          <div class="cm-art" id="cmArt">
+            <div class="cm-disc"></div>
+          </div>
+          <div class="cm-title" id="cmTitle">nothing playing</div>
+          <div class="cm-sub">local player</div>
+          <div class="cm-ctl">
+            <button id="cmPrev" aria-label="previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6a1 1 0 0 1 2 0v12a1 1 0 0 1-2 0zM20 6.6v10.8a1 1 0 0 1-1.6.8l-7.2-5.4a1 1 0 0 1 0-1.6l7.2-5.4a1 1 0 0 1 1.6.8z"/></svg></button>
+            <button id="cmPlay" aria-label="play / pause">
+              <svg class="ico-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.9l10.2-6.4a1 1 0 0 0 0-1.7L9.5 4.7A1 1 0 0 0 8 5.6z"/></svg>
+              <svg class="ico-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
+            </button>
+            <button id="cmNext" aria-label="next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 6a1 1 0 0 1 2 0v12a1 1 0 0 1-2 0zM4 6.6v10.8a1 1 0 0 0 1.6.8l7.2-5.4a1 1 0 0 0 0-1.6L5.6 5.8A1 1 0 0 0 4 6.6z"/></svg></button>
+          </div>
+        </div>
+
+        <div class="card card-sliders">
+          <label class="vslide" title="background dim">
+            <input type="range" id="slDim" min="0.2" max="1" step="0.05" />
+            <span class="vs-icon">◐</span>
+          </label>
+          <label class="vslide" title="glass blur">
+            <input type="range" id="slBlur" min="0" max="30" step="1" />
+            <span class="vs-icon">≋</span>
+          </label>
+          <label class="vslide" title="video wallpaper volume">
+            <input type="range" id="slVol" min="0" max="1" step="0.05" value="0" />
+            <span class="vs-icon">♪</span>
+          </label>
+        </div>
+      </div>
+      <div class="dock-links" id="dockLinks"></div>
+    </div>
+
+    <!-- MEDIA -->
+    <div class="dash-pane hidden" id="pane-media">
+      <div class="media-now">
+        <div class="m-art" id="mArtBox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+          <div class="m-bars" id="mBars"><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="m-info">
+          <div class="m-title" id="mTitle">nothing playing</div>
+          <div class="m-sub" id="mSrc">pick a song below</div>
+        </div>
+        <div class="m-ctl">
+          <button id="mPrev" aria-label="previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6a1 1 0 0 1 2 0v12a1 1 0 0 1-2 0zM20 6.6v10.8a1 1 0 0 1-1.6.8l-7.2-5.4a1 1 0 0 1 0-1.6l7.2-5.4a1 1 0 0 1 1.6.8z"/></svg></button>
+          <button id="mPlay" class="m-play" aria-label="play / pause">
+            <svg class="ico-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.9l10.2-6.4a1 1 0 0 0 0-1.7L9.5 4.7A1 1 0 0 0 8 5.6z"/></svg>
+            <svg class="ico-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
+          </button>
+          <button id="mNext" aria-label="next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 6a1 1 0 0 1 2 0v12a1 1 0 0 1-2 0zM4 6.6v10.8a1 1 0 0 0 1.6.8l7.2-5.4a1 1 0 0 0 0-1.6L5.6 5.8A1 1 0 0 0 4 6.6z"/></svg></button>
+        </div>
+      </div>
+      <div class="m-progress">
+        <span class="m-time" id="mCur">0:00</span>
+        <input type="range" id="mSeek" min="0" max="1000" value="0" aria-label="seek" />
+        <span class="m-time" id="mDur">–:––</span>
+      </div>
+      <div class="media-switch">
+        <button class="msw active" data-src="library">library</button>
+        <button class="msw" data-src="online">online</button>
+      </div>
+
+      <div class="src-view" id="srcLibrary">
+        <div class="song-list" id="songList"></div>
+        <div class="dash-actions">
+          <button id="mAddSongs">add songs</button>
+          <button id="mClearSongs">clear</button>
+        </div>
+      </div>
+
+      <div class="src-view hidden" id="srcOnline">
+        <div class="stream-add">
+          <input id="ytQuery" type="text" placeholder="search a song online…" spellcheck="false" />
+          <button id="ytSearchBtn">search</button>
+        </div>
+        <div class="stream-list" id="ytResults"></div>
+      </div>
+
+      <div class="queue-wrap hidden" id="queueWrap">
+        <div class="queue-head">
+          <span>up next <span class="q-badge" id="queueCount">0</span></span>
+          <button id="queueClear">clear</button>
+        </div>
+        <div class="queue-list" id="queueList"></div>
+      </div>
+
+      <div class="dash-actions">
+        <button id="mWall">wallpaper</button>
+        <button id="mWallReset">wall reset</button>
+      </div>
+    </div>
+
+    <!-- SYSTEM -->
+    <div class="dash-pane hidden" id="pane-system">
+      <div class="sys-grid">
+        <div class="card sys-card">
+          <div class="sys-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 10h3M4 14h3M17 10h3M17 14h3M10 4v3M14 4v3M10 17v3M14 17v3"/></svg>
+            <span class="sys-k">cpu</span>
+          </div>
+          <div class="sys-v" id="sysCpu">—</div>
+          <div class="sys-bar"><i id="barCpu"></i></div>
+          <div class="sys-hint" id="hintCpu">—</div>
+        </div>
+
+        <div class="card sys-card">
+          <div class="sys-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="9" rx="1.5"/><path d="M7 16v2M12 16v2M17 16v2M7.5 10.5v2M12 10.5v2M16.5 10.5v2"/></svg>
+            <span class="sys-k">memory</span>
+          </div>
+          <div class="sys-v" id="sysMem">—</div>
+          <div class="sys-bar"><i id="barMem"></i></div>
+          <div class="sys-hint" id="hintMem">—</div>
+        </div>
+
+        <div class="card sys-card">
+          <div class="sys-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5a11 11 0 0 1 16 0M7.5 15a6 6 0 0 1 9 0"/><circle cx="12" cy="18.5" r="1"/></svg>
+            <span class="sys-k">network</span>
+          </div>
+          <div class="sys-v" id="sysNet">—</div>
+          <div class="sys-bar"><i id="barNet"></i></div>
+          <div class="sys-hint" id="hintNet">—</div>
+        </div>
+
+        <div class="card sys-card">
+          <div class="sys-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 13h18"/><circle cx="7.5" cy="16" r="0.5"/></svg>
+            <span class="sys-k">disk</span>
+          </div>
+          <div class="sys-v" id="sysDisk">—</div>
+          <div class="sys-bar"><i id="barDisk"></i></div>
+          <div class="sys-hint" id="hintDisk">—</div>
+        </div>
+
+        <div class="card sys-card">
+          <div class="sys-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="17" height="10" rx="2.5"/><path d="M22 10.5v3"/></svg>
+            <span class="sys-k">battery</span>
+          </div>
+          <div class="sys-v" id="sysBat">—</div>
+          <div class="sys-bar"><i id="barBat"></i></div>
+          <div class="sys-hint" id="hintBat">—</div>
+        </div>
+
+        <div class="card sys-card">
+          <div class="sys-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>
+            <span class="sys-k">browser storage</span>
+          </div>
+          <div class="sys-v" id="sysStore">—</div>
+          <div class="sys-bar"><i id="barStore"></i></div>
+          <div class="sys-hint" id="hintStore">—</div>
+        </div>
+      </div>
+
+      <div class="card sys-card sys-wide">
+        <div class="sys-top">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          <span class="sys-k">screen time today</span>
+          <span class="st-total" id="stTotal"></span>
+        </div>
+        <div class="st-list" id="stList"><div class="sys-hint">start the backend to track apps</div></div>
+      </div>
+
+      <div class="sys-chips" id="sysChips"></div>
+    </div>
+    </div><!-- /dash-body -->
+  </div>
+
+  <!-- side quick-access: notes + todos (Alt+N / Alt+T) -->
+  <div class="side-btns">
+    <button id="btnNotes" title="notes — Alt+N" aria-label="notes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+    </button>
+    <button id="btnTodo" title="to-do — Alt+T" aria-label="to-do">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></svg>
+    </button>
+  </div>
+
+  <aside class="side-panel hidden" id="sidePanel">
+    <div class="sp-head">
+      <button class="sp-tab active" data-sp="notes"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Notes</button>
+      <button class="sp-tab" data-sp="todo"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></svg>To-do</button>
+      <button class="sp-tab" data-sp="snips"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>Snips</button>
+      <button class="sp-tab" data-sp="sent"><svg class="dt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg>Sent</button>
+      <button class="sp-close" id="spClose" aria-label="close">✕</button>
+    </div>
+    <div class="sp-view" id="spNotes">
+      <textarea id="notesArea" placeholder="scratchpad — autosaves as you type" spellcheck="false"></textarea>
+      <div class="sp-meta">
+        <span id="notesCount">0 words</span>
+        <button id="notesClear">clear</button>
+      </div>
+    </div>
+    <div class="sp-view hidden" id="spTodo">
+      <div class="todo-progress">
+        <div class="tp-bar"><i id="tpFill"></i></div>
+        <span class="tp-label" id="tpLabel">0 / 0</span>
+      </div>
+      <div class="todo-add">
+        <input id="todoInput" placeholder="add a task… (enter)" spellcheck="false" />
+        <button id="todoAddBtn" title="add">+</button>
+      </div>
+      <div class="todo-list" id="todoList"></div>
+      <button id="todoClear">clear done</button>
+    </div>
+    <div class="sp-view hidden" id="spSnips">
+      <div class="snip-hint">type the trigger anywhere → it expands. e.g. <b>;addr</b></div>
+      <div class="snip-add">
+        <input id="snipTrig" placeholder=";trigger" spellcheck="false" />
+        <textarea id="snipText" placeholder="expands to…" spellcheck="false"></textarea>
+        <button id="snipAdd">add snippet</button>
+      </div>
+      <div class="snip-list" id="snipList"></div>
+    </div>
+    <div class="sp-view hidden" id="spSent">
+      <div class="sent-head"><span>sent history</span><button id="sentClear">clear</button></div>
+      <div class="sent-list" id="sentList"></div>
+    </div>
+    <div class="sp-foot"><b>quick panel</b> · alt+n notes · alt+t tasks · esc</div>
+  </aside>
+
+  <!-- mini player: only visible while something plays -->
+  <div class="mini-player hidden" id="miniPlayer">
+    <span class="mp-eq"><i></i><i></i><i></i></span>
+    <span class="mp-title" id="mpTitle" title="open player">—</span>
+    <button id="mpPlay" aria-label="play / pause">
+      <svg class="ico-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.9l10.2-6.4a1 1 0 0 0 0-1.7L9.5 4.7A1 1 0 0 0 8 5.6z"/></svg>
+      <svg class="ico-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
+    </button>
+    <button id="mpNext" aria-label="next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 6a1 1 0 0 1 2 0v12a1 1 0 0 1-2 0zM4 6.6v10.8a1 1 0 0 0 1.6.8l7.2-5.4a1 1 0 0 0 0-1.6L5.6 5.8A1 1 0 0 0 4 6.6z"/></svg></button>
+  </div>
+
+  <!-- STASH MODE — saved things (Alt+S) -->
+  <div class="stash-mode hidden" id="stash">
+    <div class="stash-inner">
+      <div class="stash-head">
+        <h2 class="stash-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
+          saved <span class="stash-n" id="stashCount">0</span>
+        </h2>
+        <input id="stashSearch" class="stash-search" placeholder="search saved…" spellcheck="false" />
+        <button class="stash-close" id="stashClose" aria-label="close">✕</button>
+      </div>
+
+      <div class="stash-form">
+        <input id="stashName" placeholder="name — movie, article, thing…" spellcheck="false" />
+        <input id="stashUrl" placeholder="link (optional)" spellcheck="false" />
+        <button id="stashAdd">save</button>
+      </div>
+
+      <div class="stash-tagrow">
+        <span class="stash-taglabel">category</span>
+        <select id="stashCatSel" class="stash-catsel"></select>
+        <input id="stashNewCat" class="stash-newtag" placeholder="new category name" spellcheck="false" style="display:none" />
+        <button id="stashEditTags" class="stash-edittags" title="manage categories">⚙</button>
+        <div class="stash-sel" id="stashSel"></div>
+      </div>
+
+      <div class="stash-filterrow">
+        <span class="stash-taglabel">show</span>
+        <select id="stashFilter" class="stash-catsel"></select>
+      </div>
+
+      <div class="stash-grid" id="stashGrid"></div>
+    </div>
+  </div>
+
+  <!-- VAULT MODE — saved passwords (Alt+P), master-password gated -->
+  <div class="vault-mode hidden" id="vault">
+    <div class="vault-inner">
+      <div class="vault-head">
+        <h2 class="vault-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l2 2M14 9l2 2"/></svg>
+          vault
+        </h2>
+        <button id="vaultLock" class="vault-lockbtn" style="display:none">lock</button>
+        <button class="stash-close" id="vaultClose" aria-label="close">✕</button>
+      </div>
+      <div class="vault-body" id="vaultBody"></div>
+    </div>
+  </div>
+
+  <!-- PHONE COMPANION -->
+  <div class="phone-mode hidden" id="phone">
+    <div class="phone-card">
+      <button class="stash-close" id="phoneClose" aria-label="close">✕</button>
+      <div class="phone-title">📱 phone companion</div>
+      <div class="phone-qr" id="phoneQr"></div>
+      <div class="phone-url" id="phoneUrl">…</div>
+      <div class="phone-code">pair code · <b id="phoneCode">------</b></div>
+      <div class="phone-send">
+        <input id="phoneSendInput" placeholder="send a link or text to your phone…" spellcheck="false" />
+        <button id="phoneSendBtn">send →</button>
+      </div>
+      <div class="phone-hint">scan to pair · then send links & text both ways</div>
+    </div>
+  </div>
+
+  <!-- DAILY BRIEFING — shows once a day -->
+  <div class="briefing hidden" id="briefing">
+    <button class="brief-x" id="briefClose" aria-label="dismiss">✕</button>
+    <div class="brief-hi" id="briefHi">good day</div>
+    <div class="brief-lines" id="briefLines"></div>
+  </div>
+
+  <!-- the pet -->
+  <div class="pet" id="pet" title="…">
+    <span class="pet-zzz">z z</span>
+    <div class="pet-body">
+      <span class="pet-eye"></span>
+      <span class="pet-eye"></span>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span class="footer-brand">NEW TAB</span>
+    <span class="footer-dot">·</span>
+    <span id="greeting">welcome back</span>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/qrcode.min.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/client/musicApi.js"></script>
+  <script src="js/client/musicSource.js"></script>
+  <script src="js/commands.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/extras.js"></script>
+  <script src="js/stashCore.js"></script>
+  <script src="js/stash.js"></script>
+  <script src="js/vault.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

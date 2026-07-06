@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Save to Stash</title>
+<style>
+  :root { --accent: #ff4d55; --accent-soft: rgba(255,77,85,0.16); --accent-ink: #1a1a1c; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #14141a;
+    color: #f4f4f6;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 18px;
+    font-size: 13px;
+  }
+  h1 {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 800; margin-bottom: 16px;
+  }
+  h1 svg { width: 17px; height: 17px; color: var(--accent); }
+  label { display: block; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+          color: rgba(244,244,246,0.5); margin: 12px 0 5px; }
+  input {
+    width: 100%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 11px;
+    color: #f4f4f6;
+    font-family: inherit; font-size: 13px;
+    padding: 10px 13px;
+    outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  select {
+    width: 100%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 11px;
+    color: #f4f4f6;
+    font-family: inherit; font-size: 13px;
+    padding: 10px 13px; outline: none; cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+  option { background: #14141a; color: #f4f4f6; }
+  .sel { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .selchip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--accent-ink); background: var(--accent);
+    border-radius: 99px; padding: 4px 6px 4px 12px;
+  }
+  .selchip .x { cursor: pointer; background: rgba(0,0,0,0.18); border-radius: 50%;
+    width: 15px; height: 15px; display: inline-grid; place-items: center; font-size: 9px; }
+  .row button {
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06); color: #f4f4f6;
+    border-radius: 11px; padding: 9px 16px; cursor: pointer;
+  }
+  .row { display: flex; gap: 8px; margin-top: 20px; }
+  .row button { flex: 1; }
+  .row .primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 800; }
+</style>
+</head>
+<body>
+  <h1>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
+    save to stash
+  </h1>
+
+  <label for="name">name</label>
+  <input id="name" spellcheck="false" />
+
+  <label for="url">link</label>
+  <input id="url" spellcheck="false" />
+
+  <label>category</label>
+  <select id="catsel"></select>
+  <input id="newcat" placeholder="new category name" spellcheck="false" style="display:none;margin-top:8px" />
+  <div class="sel" id="sel"></div>
+
+  <div class="row">
+    <button id="cancel">cancel</button>
+    <button id="save" class="primary">save</button>
+  </div>
+
+  <script src="js/stashCore.js"></script>
+  <script src="js/save.js"></script>
+</body>
+</html>
