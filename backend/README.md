@@ -1,6 +1,6 @@
 # NullTab Music Server
 
-NullTab Music Server is a lightweight ASP.NET Core backend designed to bring your local music collection into the browser-based start page experience. It scans your music directory, reads metadata and cover art, and exposes clean HTTP endpoints so the extension can browse and play tracks without relying on cloud services.
+NullTab Music Server is a lightweight ASP.NET Core backend designed to bring your local music collection into the browser-based Nyx experience. It scans your music directory, reads metadata and cover art, and exposes clean HTTP endpoints so the extension can browse and play tracks without relying on cloud services.
 
 ## Main features
 

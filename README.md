@@ -1,4 +1,6 @@
-START PAGE — Brave extension
+Nyx — Brave extension
+
+![screenshot](/assets/screenshots/screenshoot.png)
 
 Make your new tab feel like a personal command center.
 This project is a beautiful, modern Brave extension that replaces the ordinary new-tab page with something more useful, stylish, and personal. Instead of staring at a blank or generic page, you get a fast workspace for your favorite links, a live dashboard, immersive wallpapers, and a smooth local media experience.

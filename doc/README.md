@@ -1,4 +1,4 @@
-# NullTab — Start Page
+# NullTab — Nyx
 
 A glass, keyboard-driven **new-tab replacement for Brave/Chrome**, backed by an
 optional local **C# server** that unlocks music, live system stats, a password

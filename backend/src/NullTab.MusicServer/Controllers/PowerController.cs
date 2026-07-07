@@ -6,7 +6,7 @@ namespace NullTab.MusicServer.Controllers;
 
 /// <summary>
 /// Little command-center for the machine itself: lock, sleep, mute, and a
-/// cancelable shutdown. Triggered from the start page's ">" commands.
+/// cancelable shutdown. Triggered from the Nyx's ">" commands.
 /// All actions are local-only (the server binds to 127.0.0.1).
 /// </summary>
 [ApiController]

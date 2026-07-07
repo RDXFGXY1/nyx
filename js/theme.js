@@ -19,9 +19,11 @@ const THEME = {
 
     try {
       const saved = await idbGet("wallpaper");
-      if (saved) this.applyWallpaper(saved);
+      // CSS no longer hardcodes the default, so apply saved OR default here
+      this.applyWallpaper(saved || { type: "image", data: this.DEFAULT_BG });
     } catch (e) {
       console.error("[wallpaper] load failed:", e);
+      this.applyWallpaper({ type: "image", data: this.DEFAULT_BG });
     }
 
     const savedAccent = localStorage.getItem("accent");
@@ -161,6 +163,11 @@ const THEME = {
     root.setProperty("--accent", hex);
     root.setProperty("--accent-soft", `rgba(${r}, ${g}, ${b}, 0.14)`);
     root.setProperty("--accent-ink", ink);
+
+    // cache a dark tint of the wallpaper as the next-tab placeholder (kills the flash)
+    try {
+      localStorage.setItem("bgColor", `rgb(${Math.round(r * 0.16)},${Math.round(g * 0.16)},${Math.round(b * 0.16)})`);
+    } catch {}
 
     // publish to shared storage so the in-page popups (content scripts) match
     try {

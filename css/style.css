@@ -1,5 +1,5 @@
 /* =========================================================
-   START PAGE — style.css (glass / video style)
+   Nyx — style.css (glass / video style)
    ========================================================= */
 
 :root {
@@ -38,7 +38,11 @@ body {
   position: fixed;
   inset: 0;
   z-index: -3;
-  background: url("../assets/bg.jpg") center / cover no-repeat;
+  /* no default image here — theme.js sets it, so a saved wallpaper never
+     flashes the default first. the html placeholder color shows meanwhile. */
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   transform: scale(var(--pulse-scale, 1));
   filter: brightness(var(--pulse-bright, 1));
   transition: transform .09s linear, filter .09s linear;
@@ -779,6 +783,31 @@ body {
 }
 .dash-actions button:hover { background: var(--accent-soft); color: var(--ink); }
 
+/* wallpaper footer — a clearly separate, secondary strip (not a music action) */
+.media-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+.mf-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-faint); }
+.mf-btns { display: flex; gap: 6px; }
+.mf-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: color .2s var(--ease-soft), background .2s var(--ease-soft);
+}
+.mf-btn:hover { color: var(--ink); background: var(--accent-soft); }
+
 /* ----- system pane ----- */
 .sys-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .sys-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
@@ -1069,6 +1098,24 @@ body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; 
 .stream-add button:active { transform: scale(0.94); }
 
 /* ----- media source switcher (library / online) ----- */
+.media-bar { position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.media-bar .media-switch { margin: 0; }
+.media-acts { position: absolute; right: 0; display: flex; gap: 6px; }
+.media-acts.hidden { display: none; }
+.ma-icon {
+  width: 30px; height: 30px; border-radius: 9px; padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--ink-dim);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: color .2s var(--ease-soft), background .2s var(--ease-soft), transform .15s var(--ease-soft);
+}
+.ma-icon svg { width: 15px; height: 15px; }
+.ma-icon:hover { color: var(--ink); background: var(--accent-soft); }
+.ma-icon:active { transform: scale(0.9); }
+
 .media-switch {
   display: flex;
   gap: 4px;
@@ -2190,14 +2237,34 @@ svg.dt-ico { width: 15px; height: 15px; }
 .queue-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   margin: 0 2px 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--ink-dim);
+  cursor: pointer;
+  user-select: none;
+  transition: color .2s var(--ease-soft);
 }
+.queue-head:hover { color: var(--ink); }
+.q-title { flex: 1; }
+.q-chev {
+  width: 13px; height: 13px; flex: none;
+  color: var(--accent);
+  transition: transform .35s var(--ease-soft);
+}
+.queue-wrap.collapsed .q-chev { transform: rotate(-90deg); }
+
+/* fold the list with a smooth grid animation */
+.queue-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows .4s var(--ease-soft), opacity .3s var(--ease-soft);
+}
+.queue-body > .queue-list { min-height: 0; }
+.queue-wrap.collapsed .queue-body { grid-template-rows: 0fr; opacity: 0; }
 .q-badge {
   display: inline-grid;
   place-items: center;

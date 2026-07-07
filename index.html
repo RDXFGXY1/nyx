@@ -4,9 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>New Tab</title>
-  
-  
-  
+  <script>
+    /* paint a placeholder that matches the wallpaper BEFORE anything renders,
+       so opening a new tab never flashes the default image */
+    try {
+      var __bg = localStorage.getItem("bgColor") || "#0e0e10";
+      document.documentElement.style.background = __bg;
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -151,17 +156,23 @@
         <input type="range" id="mSeek" min="0" max="1000" value="0" aria-label="seek" />
         <span class="m-time" id="mDur">–:––</span>
       </div>
-      <div class="media-switch">
-        <button class="msw active" data-src="library">library</button>
-        <button class="msw" data-src="online">online</button>
+      <div class="media-bar">
+        <div class="media-switch">
+          <button class="msw active" data-src="library">library</button>
+          <button class="msw" data-src="online">online</button>
+        </div>
+        <div class="media-acts" id="libActs">
+          <button id="mAddSongs" class="ma-icon" title="add songs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="mClearSongs" class="ma-icon" title="clear library">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+          </button>
+        </div>
       </div>
 
       <div class="src-view" id="srcLibrary">
         <div class="song-list" id="songList"></div>
-        <div class="dash-actions">
-          <button id="mAddSongs">add songs</button>
-          <button id="mClearSongs">clear</button>
-        </div>
       </div>
 
       <div class="src-view hidden" id="srcOnline">
@@ -173,16 +184,20 @@
       </div>
 
       <div class="queue-wrap hidden" id="queueWrap">
-        <div class="queue-head">
-          <span>up next <span class="q-badge" id="queueCount">0</span></span>
+        <div class="queue-head" id="queueToggle" role="button" tabindex="0">
+          <svg class="q-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          <span class="q-title">up next <span class="q-badge" id="queueCount">0</span></span>
           <button id="queueClear">clear</button>
         </div>
-        <div class="queue-list" id="queueList"></div>
+        <div class="queue-body"><div class="queue-list" id="queueList"></div></div>
       </div>
 
-      <div class="dash-actions">
-        <button id="mWall">wallpaper</button>
-        <button id="mWallReset">wall reset</button>
+      <div class="media-foot">
+        <span class="mf-label">wallpaper</span>
+        <div class="mf-btns">
+          <button id="mWall" class="mf-btn">change</button>
+          <button id="mWallReset" class="mf-btn">reset</button>
+        </div>
       </div>
     </div>
 

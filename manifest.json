@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "nyx",
   "version": "1.0.0",
-  "description": "Glass start page: link groups, command mode (>), Alt+D dock, image/video wallpaper with auto colors.",
+  "description": "Glass Nyx: link groups, command mode (>), Alt+D dock, image/video wallpaper with auto colors.",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },

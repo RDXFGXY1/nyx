@@ -170,13 +170,36 @@ public sealed class MusicLibrary : IMusicLibrary
 
     private string ResolveLibraryPath()
     {
-        var p = _opts.Library;
-        if (p == "~" || p.StartsWith("~/") || p.StartsWith("~\\"))
+        var raw = string.IsNullOrWhiteSpace(_opts.Library) ? "~/Music" : _opts.Library;
+        var usedTilde = raw == "~" || raw.StartsWith("~/") || raw.StartsWith("~\\");
+
+        var p = raw;
+        if (usedTilde)
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            p = Path.Combine(home, p.Length <= 2 ? "" : p[2..]);
+            // normalize slashes so "~/Music" works on Windows too
+            var rest = raw.Length <= 2 ? "" : raw[2..].Replace('\\', '/');
+            p = Path.Combine(home, rest);
         }
-        return Path.GetFullPath(p);
+        p = Path.GetFullPath(p);
+        if (Directory.Exists(p)) return p;
+
+        // a custom absolute path is respected even if missing (it'll log a warning)
+        if (!usedTilde) return p;
+
+        // default "~/Music" not found → find the OS's real Music folder.
+        // Handles OneDrive-relocated Music on Windows, and $HOME/Music on Linux/macOS.
+        var myMusic = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
+        if (!string.IsNullOrEmpty(myMusic) && Directory.Exists(myMusic)) return myMusic;
+
+        // last resort: common folder names under the home dir (Linux is case-sensitive)
+        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        foreach (var name in new[] { "Music", "music", "MUSIC" })
+        {
+            var cand = Path.Combine(homeDir, name);
+            if (Directory.Exists(cand)) return cand;
+        }
+        return p;
     }
 
     private static string MakeId(string relativePath)

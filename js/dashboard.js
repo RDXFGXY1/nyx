@@ -227,6 +227,7 @@ function renderQueue() {
   const list = document.getElementById("queueList");
   if (!wrap || !list) return;
   wrap.classList.toggle("hidden", !PLAYER.queue.length);
+  wrap.classList.toggle("collapsed", localStorage.getItem("queueCollapsed") === "1");
   document.getElementById("queueCount").textContent = PLAYER.queue.length;
   list.innerHTML = PLAYER.queue
     .map((q, i) => `
@@ -396,9 +397,20 @@ function setupMedia() {
     if (!PLAYER.stream) playIndex(PLAYER.idx + 1);
   });
 
-  document.getElementById("queueClear").addEventListener("click", () => {
+  document.getElementById("queueClear").addEventListener("click", (e) => {
+    e.stopPropagation();
     PLAYER.queue = []; renderQueue(); toast("queue cleared");
   });
+
+  // collapse / expand the up-next queue (arrow on the left)
+  const qToggle = () => {
+    const collapsed = localStorage.getItem("queueCollapsed") === "1";
+    localStorage.setItem("queueCollapsed", collapsed ? "0" : "1");
+    document.getElementById("queueWrap").classList.toggle("collapsed", !collapsed);
+  };
+  const qt = document.getElementById("queueToggle");
+  qt.addEventListener("click", qToggle);
+  qt.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); qToggle(); } });
   PLAYER.audio.addEventListener("play", updateNowPlaying);
   PLAYER.audio.addEventListener("pause", updateNowPlaying);
 
@@ -434,6 +446,7 @@ function setupMedia() {
       document.querySelectorAll(".msw").forEach((x) => x.classList.toggle("active", x === b));
       document.getElementById("srcLibrary").classList.toggle("hidden", b.dataset.src !== "library");
       document.getElementById("srcOnline").classList.toggle("hidden", b.dataset.src !== "online");
+      document.getElementById("libActs").classList.toggle("hidden", b.dataset.src !== "library");
       if (b.dataset.src === "online") document.getElementById("ytQuery").focus();
     })
   );
