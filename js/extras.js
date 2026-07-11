@@ -222,7 +222,7 @@ function renderLauncher(q) {
   el.querySelectorAll(".palette-item").forEach((it) =>
     it.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      window.location.href = LAUNCH.items[+it.dataset.i].url;
+      goTo(LAUNCH.items[+it.dataset.i].url);
     })
   );
 }
@@ -245,7 +245,7 @@ function launcherKey(e, input) {
 /* Enter in the search bar: open the selected link (app.js calls this) */
 function launcherSubmit() {
   if (!LAUNCH.open || !LAUNCH.items[LAUNCH.sel]) return false;
-  window.location.href = LAUNCH.items[LAUNCH.sel].url;
+  goTo(LAUNCH.items[LAUNCH.sel].url);
   return true;
 }
 
@@ -323,37 +323,41 @@ function togglePet() {
 }
 
 /* ---------- screen-time card on the main grid ---------- */
-async function renderScreenCard() {
+/* a monthly calendar card on the main screen (replaces the old screen-time card) */
+function renderCalendarCard() {
   const col = document.querySelector(".col-4");
   if (!col || (typeof EDIT_MODE !== "undefined" && EDIT_MODE)) return;
-
-  let st = null;
-  if (typeof MusicSource !== "undefined" && MusicSource.api) {
-    try { st = await MusicSource.api.screenTime(); } catch { /* backend offline */ }
-  }
-
-  const old = document.getElementById("stCard");
+  const old = document.getElementById("calCard");
   if (old) old.remove();
-  if (!st || !st.apps.length) return; // offline → keep the main screen clean
 
-  const top = st.apps[0].sec || 1;
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth(), today = now.getDate();
+  const monthName = now.toLocaleDateString([], { month: "long" });
+
+  const days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  let head = days.map((d) => `<span class="cc-h">${d}</span>`).join("");
+  const first = new Date(y, m, 1);
+  const startDow = (first.getDay() + 6) % 7; // Mon = 0
+  const dim = new Date(y, m + 1, 0).getDate();
+  const prevDim = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = startDow - 1; i >= 0; i--) cells.push({ d: prevDim - i, out: true });
+  for (let d = 1; d <= dim; d++) cells.push({ d, today: d === today });
+  let nx = 1;
+  while (cells.length % 7 !== 0) cells.push({ d: nx++, out: true });
+  const grid = cells.map((c) =>
+    `<span class="cc-d ${c.out ? "out" : ""} ${c.today ? "today" : ""}">${c.d}</span>`).join("");
+
   const el = document.createElement("section");
-  el.className = "group st-card";
-  el.id = "stCard";
+  el.className = "group cal-card";
+  el.id = "calCard";
   el.dataset.view = "home";
   el.innerHTML = `
     <div class="group-head">
-      <span class="group-title">Screen time</span>
-      <span class="group-count">${fmtHM(st.totalSec)}</span>
+      <span class="group-title">${monthName}</span>
+      <span class="group-count">${y}</span>
     </div>
-    <div class="st-list">
-      ${st.apps.slice(0, 5).map((a) => `
-        <div class="st-row">
-          <span class="st-name">${escHtml(appLabel(a.name))}</span>
-          <span class="st-bar"><i style="width:${Math.max(4, (a.sec / top) * 100)}%"></i></span>
-          <span class="st-time">${fmtHM(a.sec)}</span>
-        </div>`).join("")}
-    </div>`;
+    <div class="cc-grid">${head}${grid}</div>`;
   el.classList.toggle("hidden", typeof CURRENT_VIEW !== "undefined" && CURRENT_VIEW !== "home");
   col.appendChild(el);
 }
@@ -718,6 +722,264 @@ function setupPhone() {
   pushPhoneTheme();
 }
 
+/* ---------- settings panel (the gear) ---------- */
+function openSettings(force) {
+  const el = document.getElementById("settings");
+  const show = force !== undefined ? force : el.classList.contains("hidden");
+  el.classList.toggle("hidden", !show);
+  if (show) syncSettings();
+}
+
+function syncSettings() {
+  const g = (id) => document.getElementById(id);
+  g("setDim").value = localStorage.getItem("dim") ?? 1;
+  g("setBlur").value = parseInt(localStorage.getItem("blur") ?? 18);
+  const acc = localStorage.getItem("accent") || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  if (/^#[0-9a-f]{6}$/i.test(acc)) g("setAccent").value = acc;
+  g("setVol").value = localStorage.getItem("vol") ?? 0;
+  g("setPet").checked = !localStorage.getItem("petOff");
+  g("setAutodj").checked = !localStorage.getItem("autodjOff");
+  g("setPulse").checked = !localStorage.getItem("pulseOff");
+  g("setVisited").checked = localStorage.getItem("topHidden") !== "1";
+  g("setName").value = (typeof SETTINGS !== "undefined" && SETTINGS.name) || localStorage.getItem("name") || "";
+  g("setCity").value = (typeof SETTINGS !== "undefined" && SETTINGS.city) || localStorage.getItem("city") || "";
+
+  g("setRandomWall").checked = localStorage.getItem("randomWall") === "1";
+  g("setRandomType").value = localStorage.getItem("randomWallType") || "both";
+  g("setRandomTypeRow").style.display = g("setRandomWall").checked ? "" : "none";
+  updateRandomWallHint();
+
+  g("setLyrics").checked = localStorage.getItem("lyricsOn") === "1";
+  g("setLyricsSize").value = localStorage.getItem("lyricsSize") || 44;
+  g("setLyricsAnim").value = localStorage.getItem("lyricsAnim") || "fade";
+  g("setLyricsPos").value = localStorage.getItem("lyricsPos") || "center";
+  g("setLyricsColor").value = localStorage.getItem("lyricsColor") || "white";
+  g("lyricsSettings").style.display = g("setLyrics").checked ? "" : "none";
+  g("lyricsFontHint").textContent = localStorage.getItem("lyricsFont")
+    ? "font: " + localStorage.getItem("lyricsFont")
+    : "upload a .ttf / .otf / .woff to style the lyrics";
+}
+
+/* status line for the random-wallpaper folder — local picked folder or server path */
+async function updateRandomWallHint() {
+  const el = document.getElementById("setRandomHint");
+  if (!el) return;
+  const esc = (s) => String(s).replace(/</g, "&lt;");
+
+  // 1) a folder the user picked in-browser (File System Access)
+  if (localStorage.getItem("wallSource") === "local") {
+    try {
+      const handle = await idbGet("wallDirHandle");
+      if (handle) {
+        const n = await THEME.countLocal(handle);
+        const granted = (await handle.queryPermission({ mode: "read" })) === "granted";
+        el.innerHTML =
+          `folder: <b>${esc(handle.name)}</b> — ${n} wallpaper${n !== 1 ? "s" : ""}` +
+          (granted ? "" : ' — <i>click “choose folder” to re-allow access</i>');
+        return;
+      }
+    } catch {}
+  }
+
+  // 2) a path the local server reads
+  const rec = "choose a folder of images / videos — a random one loads on every new tab";
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1500);
+    const res = await fetch("http://127.0.0.1:5055/api/wallpaper/list", { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) throw 0;
+    const d = await res.json();
+    const input = document.getElementById("setWallFolder");
+    if (input && !input.matches(":focus") && !input.dataset.dirty) input.value = d.folder;
+    if (localStorage.getItem("wallSource") === "server") {
+      el.innerHTML = d.exists
+        ? `reading <b>${esc(d.folder)}</b> — ${d.images.length} image${d.images.length !== 1 ? "s" : ""}, ${d.videos.length} video${d.videos.length !== 1 ? "s" : ""}`
+        : `folder not found: <b>${esc(d.folder)}</b> — check the path`;
+    } else {
+      el.innerHTML = rec;
+    }
+  } catch {
+    el.innerHTML = rec;
+  }
+}
+
+/* the user picks ANY folder — send it to the server, which persists it */
+async function saveWallFolder() {
+  const input = document.getElementById("setWallFolder");
+  const path = input.value.trim();
+  if (!path) return;
+  try {
+    const res = await fetch("http://127.0.0.1:5055/api/wallpaper/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.ok) {
+      delete input.dataset.dirty;
+      localStorage.setItem("wallSource", "server");
+      localStorage.setItem("randomWall", "1");
+      const img = d.images || 0, vid = d.videos || 0; // /folder returns counts
+      toast(img + vid ? `folder set — ${img} images, ${vid} videos` : "folder set — but it has no images/videos");
+      await THEME.applyRandomWallpaper(true);
+    } else {
+      toast(d.error === "folder not found" ? "folder not found — check the path" : "could not set folder");
+    }
+  } catch {
+    toast("music server offline — start backend/run.bat");
+  }
+  updateRandomWallHint();
+}
+
+function applyVideoVolume() {
+  const v = document.getElementById("bgVideo");
+  if (!v) return;
+  const vol = parseFloat(localStorage.getItem("vol") ?? 0);
+  v.volume = vol;
+  v.muted = vol === 0;
+}
+
+function setupSettings() {
+  const g = (id) => document.getElementById(id);
+  applyVideoVolume();
+  g("settingsBtn").addEventListener("click", () => openSettings());
+  g("setClose").addEventListener("click", () => openSettings(false));
+  g("settings").addEventListener("click", (e) => { if (e.target.id === "settings") openSettings(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") openSettings(false); });
+
+  g("setWall").addEventListener("click", () => THEME.pickWallpaper());
+  g("setWallReset").addEventListener("click", () => THEME.resetWallpaper());
+  g("setAccentAuto").addEventListener("click", () => { localStorage.removeItem("accent"); THEME.autoAccent(); });
+  g("setAccent").addEventListener("input", (e) => THEME.applyAccentHex(e.target.value));
+  g("setDim").addEventListener("input", (e) => {
+    document.documentElement.style.setProperty("--dim", e.target.value);
+    localStorage.setItem("dim", e.target.value);
+    const s = document.getElementById("slDim"); if (s) s.value = e.target.value;
+  });
+  g("setBlur").addEventListener("input", (e) => {
+    document.documentElement.style.setProperty("--blur", e.target.value + "px");
+    localStorage.setItem("blur", e.target.value);
+    const s = document.getElementById("slBlur"); if (s) s.value = e.target.value;
+  });
+  g("setVol").addEventListener("input", (e) => {
+    localStorage.setItem("vol", e.target.value);
+    applyVideoVolume();
+  });
+
+  g("setPet").addEventListener("change", (e) => {
+    const pet = document.getElementById("pet");
+    if (e.target.checked) { localStorage.removeItem("petOff"); pet.classList.remove("hidden"); }
+    else { localStorage.setItem("petOff", "1"); pet.classList.add("hidden"); }
+  });
+  g("setAutodj").addEventListener("change", (e) => {
+    if (e.target.checked) localStorage.removeItem("autodjOff"); else localStorage.setItem("autodjOff", "1");
+  });
+  g("setPulse").addEventListener("change", (e) => {
+    if (e.target.checked) localStorage.removeItem("pulseOff");
+    else { localStorage.setItem("pulseOff", "1"); if (typeof stopPulse === "function") stopPulse(); }
+  });
+  g("setVisited").addEventListener("change", (e) => {
+    localStorage.setItem("topHidden", e.target.checked ? "0" : "1");
+    if (typeof renderTopSites === "function") renderTopSites();
+  });
+
+  g("setRandomWall").addEventListener("change", async (e) => {
+    g("setRandomTypeRow").style.display = e.target.checked ? "" : "none";
+    if (e.target.checked) {
+      localStorage.setItem("randomWall", "1");
+      const hasFolder = !!localStorage.getItem("wallSource");
+      const ok = hasFolder && (await THEME.applyRandomWallpaper(true));
+      if (ok) toast("random wallpaper on");
+      else toast('random wallpaper on — now click “choose folder”');
+      updateRandomWallHint();
+    } else {
+      localStorage.removeItem("randomWall");
+      THEME.init(); // back to the saved wallpaper
+      toast("random wallpaper off");
+    }
+  });
+  g("setRandomType").addEventListener("change", async (e) => {
+    localStorage.setItem("randomWallType", e.target.value);
+    if (localStorage.getItem("randomWall") === "1") await THEME.applyRandomWallpaper();
+  });
+  g("setLyrics").addEventListener("change", (e) => {
+    g("lyricsSettings").style.display = e.target.checked ? "" : "none";
+    if (e.target.checked) {
+      localStorage.setItem("lyricsOn", "1");
+      LYRICS.applyStyle();
+      if (typeof updateNowPlaying === "function") updateNowPlaying();
+      toast("lyrics on");
+    } else {
+      localStorage.removeItem("lyricsOn");
+      LYRICS.hide();
+      toast("lyrics off");
+    }
+  });
+  g("setLyricsSize").addEventListener("input", (e) => {
+    localStorage.setItem("lyricsSize", e.target.value); LYRICS.applyStyle();
+  });
+  g("setLyricsAnim").addEventListener("change", (e) => {
+    localStorage.setItem("lyricsAnim", e.target.value); LYRICS.applyStyle();
+  });
+  g("setLyricsPos").addEventListener("change", (e) => {
+    localStorage.setItem("lyricsPos", e.target.value); LYRICS.applyStyle();
+  });
+  g("setLyricsColor").addEventListener("change", (e) => {
+    localStorage.setItem("lyricsColor", e.target.value); LYRICS.applyStyle();
+  });
+  g("setLyricsFont").addEventListener("click", () => {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".ttf,.otf,.woff,.woff2,font/*";
+    inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      const ok = await LYRICS.setFont(f);
+      g("lyricsFontHint").textContent = ok ? "font: " + f.name : "could not load that font";
+      toast(ok ? "lyrics font set" : "font failed");
+    };
+    inp.click();
+  });
+  g("setLyricsFontReset").addEventListener("click", async () => {
+    await LYRICS.clearFont();
+    g("lyricsFontHint").textContent = "upload a .ttf / .otf / .woff to style the lyrics";
+    toast("default font");
+  });
+
+  g("setWallChoose").addEventListener("click", async () => {
+    await THEME.chooseWallpaperFolder();
+    g("setRandomWall").checked = localStorage.getItem("randomWall") === "1";
+    g("setRandomTypeRow").style.display = g("setRandomWall").checked ? "" : "none";
+    updateRandomWallHint();
+  });
+  g("setWallFolder").addEventListener("input", (e) => { e.target.dataset.dirty = "1"; });
+  g("setWallFolder").addEventListener("keydown", (e) => { if (e.key === "Enter") saveWallFolder(); });
+  g("setWallFolderSave").addEventListener("click", saveWallFolder);
+
+  g("setName").addEventListener("change", (e) => {
+    const v = e.target.value.trim();
+    localStorage.setItem("name", v);
+    if (typeof SETTINGS !== "undefined") SETTINGS.name = v;
+    if (typeof setGreeting === "function") setGreeting();
+  });
+  g("setCity").addEventListener("change", (e) => {
+    const v = e.target.value.trim();
+    localStorage.setItem("city", v);
+    if (typeof SETTINGS !== "undefined") SETTINGS.city = v;
+    if (typeof loadWeather === "function") loadWeather();
+  });
+
+  const reset = g("setReset");
+  reset.addEventListener("click", () => {
+    if (reset.dataset.arm) { localStorage.clear(); location.reload(); }
+    else {
+      reset.dataset.arm = "1"; reset.textContent = "sure? this wipes everything — click again";
+      reset.classList.add("armed");
+      setTimeout(() => { delete reset.dataset.arm; reset.textContent = "reset all settings"; reset.classList.remove("armed"); }, 3000);
+    }
+  });
+}
+
 /* ---------- shortcuts + boot ---------- */
 function setupExtras() {
   setupNotes();
@@ -729,12 +991,13 @@ function setupExtras() {
   setupSnips();
   setupBriefing();
   setupPhone();
+  setupSettings();
+  if (typeof LYRICS !== "undefined") LYRICS.init();
   applyDayMood();
   setInterval(applyDayMood, 10 * 60 * 1000);
 
-  // screen-time card: first try shortly after boot, then refresh every minute
-  setTimeout(renderScreenCard, 2500);
-  setInterval(renderScreenCard, 60 * 1000);
+  // calendar card on the main screen
+  renderCalendarCard();
 
   document.getElementById("btnNotes").addEventListener("click", () => openPanel("notes"));
   document.getElementById("btnTodo").addEventListener("click", () => openPanel("todo"));

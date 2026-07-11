@@ -141,6 +141,7 @@ public sealed class MusicLibrary : IMusicLibrary
                 Title = title,
                 Artist = string.IsNullOrWhiteSpace(tag.Artist) ? "Unknown Artist" : tag.Artist,
                 Album = string.IsNullOrWhiteSpace(tag.Album) ? "Unknown Album" : tag.Album,
+                Genre = tag.Genre ?? "",
                 Duration = tag.Duration,           // seconds
                 TrackNumber = TrackNo(tag),
                 HasArt = tag.EmbeddedPictures.Count > 0,

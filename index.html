@@ -19,6 +19,7 @@
   <video class="bg-video hidden" id="bgVideo" autoplay muted loop playsinline></video>
   <div class="bg-overlay"></div>
   <div class="mood-tint" id="moodTint"></div>
+  <div class="lyrics-layer" id="lyricsLayer" data-pos="center" data-anim="fade"><span class="ly-line" id="lyricsLine"></span></div>
 
   <!-- TOP BAR -->
   <header class="topbar">
@@ -31,33 +32,132 @@
       <button class="edit-btn" id="stashOpenBtn" title="saved — Alt+S" aria-label="saved things">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
       </button>
-      <button class="edit-btn" id="editBtn" title="edit links" aria-label="edit links">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 3 21l.5-4.5z"/></svg>
-      </button>
       <div class="clock" id="clock" title="calendar">
         <span class="time" id="time">--:--</span>
         <span class="date" id="date">---</span>
       </div>
-      <div class="weather" id="weather">
+      <div class="weather" id="weather" title="weather">
         <span class="temp" id="temp">--°</span>
         <span class="cond" id="cond">···</span>
       </div>
       <div class="cal-pop hidden" id="calPop"></div>
+      <div class="wx-pop hidden" id="wxPop"></div>
     </div>
   </header>
 
   <!-- SEARCH -->
-  <div class="search-wrap">
-    <div id="searchForm" class="search">
-      <span class="search-mark">/</span>
-      <input id="searchInput" type="text" placeholder="search or type url" spellcheck="false" />
-      <span class="search-hint" id="engineHint">brave</span>
+  <div class="search-cluster">
+    <div class="search-wrap">
+      <div id="searchForm" class="search">
+        <span class="search-mark">/</span>
+        <input id="searchInput" type="text" placeholder="search or type url" spellcheck="false" />
+        <span class="search-hint" id="engineHint">brave</span>
+      </div>
+      <div class="palette" id="palette"></div>
     </div>
-    <div class="palette" id="palette"></div>
+
+    <!-- MOST VISITED -->
+    <div class="top-sites hidden" id="topSites"></div>
   </div>
 
   <!-- GRID OF LINK GROUPS -->
   <main class="grid" id="grid"></main>
+
+  <!-- SETTINGS -->
+  <button class="gear-btn" id="settingsBtn" data-tip="settings" aria-label="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 6.9 4.2l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+
+  <div class="settings hidden" id="settings">
+    <div class="settings-card">
+      <div class="set-head">
+        <h2 class="set-title">settings</h2>
+        <button class="set-close" id="setClose" aria-label="close">✕</button>
+      </div>
+      <div class="set-body">
+        <div class="set-section">
+          <div class="set-label">appearance</div>
+          <div class="set-row"><span>wallpaper</span><div class="set-inline"><button class="set-btn" id="setWall">change</button><button class="set-btn" id="setWallReset">reset</button></div></div>
+          <label class="set-toggle"><span>random wallpaper (each new tab)</span><input type="checkbox" id="setRandomWall" /><i class="tgl"></i></label>
+          <div class="set-row" id="setRandomTypeRow"><span>random type</span>
+            <select id="setRandomType" class="set-input set-select">
+              <option value="both">images + videos</option>
+              <option value="image">images only</option>
+              <option value="video">videos only</option>
+            </select>
+          </div>
+          <div class="set-row" id="setWallFolderRow"><span>wallpapers folder</span>
+            <div class="set-inline">
+              <button class="set-btn set-btn-accent" id="setWallChoose">choose folder…</button>
+            </div>
+          </div>
+          <div class="set-hint" id="setRandomHint">choose a folder of images / videos — a random one loads on every new tab</div>
+          <details class="set-adv">
+            <summary>advanced: type a folder path (read by the local server)</summary>
+            <div class="set-inline set-adv-row">
+              <input type="text" id="setWallFolder" class="set-input set-folder" placeholder="C:\path\to\wallpapers" spellcheck="false" />
+              <button class="set-btn" id="setWallFolderSave">use</button>
+            </div>
+          </details>
+          <div class="set-row"><span>accent</span><div class="set-inline"><button class="set-btn" id="setAccentAuto">auto</button><input type="color" id="setAccent" class="set-color" /></div></div>
+          <div class="set-row"><span>background dim</span><input type="range" id="setDim" class="set-range" min="0.2" max="1" step="0.05" /></div>
+          <div class="set-row"><span>glass blur</span><input type="range" id="setBlur" class="set-range" min="0" max="30" step="1" /></div>
+          <div class="set-row"><span>video wallpaper volume</span><input type="range" id="setVol" class="set-range" min="0" max="1" step="0.05" /></div>
+        </div>
+        <div class="set-section">
+          <div class="set-label">lyrics on wallpaper</div>
+          <label class="set-toggle"><span>show synced lyrics</span><input type="checkbox" id="setLyrics" /><i class="tgl"></i></label>
+          <div class="ly-settings" id="lyricsSettings">
+            <div class="set-row"><span>text size</span><input type="range" id="setLyricsSize" class="set-range" min="20" max="90" step="2" /></div>
+            <div class="set-row"><span>animation</span>
+              <select id="setLyricsAnim" class="set-input set-select">
+                <option value="fade">fade</option>
+                <option value="slide">slide up</option>
+                <option value="glow">glow</option>
+                <option value="blur">focus (blur in)</option>
+                <option value="none">none</option>
+              </select>
+            </div>
+            <div class="set-row"><span>position</span>
+              <select id="setLyricsPos" class="set-input set-select">
+                <option value="center">center</option>
+                <option value="top">top</option>
+                <option value="bottom">bottom</option>
+              </select>
+            </div>
+            <div class="set-row"><span>color</span>
+              <select id="setLyricsColor" class="set-input set-select">
+                <option value="white">white</option>
+                <option value="accent">accent</option>
+              </select>
+            </div>
+            <div class="set-row"><span>font</span>
+              <div class="set-inline">
+                <button class="set-btn" id="setLyricsFont">upload…</button>
+                <button class="set-btn" id="setLyricsFontReset">default</button>
+              </div>
+            </div>
+            <div class="set-hint" id="lyricsFontHint">upload a .ttf / .otf / .woff to style the lyrics</div>
+          </div>
+        </div>
+        <div class="set-section">
+          <div class="set-label">extras</div>
+          <label class="set-toggle"><span>the pet</span><input type="checkbox" id="setPet" /><i class="tgl"></i></label>
+          <label class="set-toggle"><span>auto-dj (music follows you)</span><input type="checkbox" id="setAutodj" /><i class="tgl"></i></label>
+          <label class="set-toggle"><span>wallpaper pulses to music</span><input type="checkbox" id="setPulse" /><i class="tgl"></i></label>
+          <label class="set-toggle"><span>most-visited row</span><input type="checkbox" id="setVisited" /><i class="tgl"></i></label>
+        </div>
+        <div class="set-section">
+          <div class="set-label">you</div>
+          <div class="set-row"><span>name</span><input type="text" id="setName" class="set-input" placeholder="your name" /></div>
+          <div class="set-row"><span>weather city</span><input type="text" id="setCity" class="set-input" placeholder="city" /></div>
+        </div>
+        <div class="set-section">
+          <button class="set-reset" id="setReset">reset all settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- DASHBOARD (Alt+D) -->
   <div class="dash hidden" id="dock">
@@ -113,26 +213,23 @@
           </div>
         </div>
 
-        <div class="card card-sliders">
-          <label class="vslide" title="background dim">
-            <input type="range" id="slDim" min="0.2" max="1" step="0.05" />
-            <span class="vs-icon">◐</span>
-          </label>
-          <label class="vslide" title="glass blur">
-            <input type="range" id="slBlur" min="0" max="30" step="1" />
-            <span class="vs-icon">≋</span>
-          </label>
-          <label class="vslide" title="video wallpaper volume">
-            <input type="range" id="slVol" min="0" max="1" step="0.05" value="0" />
-            <span class="vs-icon">♪</span>
-          </label>
-        </div>
       </div>
       <div class="dock-links" id="dockLinks"></div>
     </div>
 
     <!-- MEDIA -->
     <div class="dash-pane hidden" id="pane-media">
+      <!-- audio playing in your other browser tabs -->
+      <div class="tab-audio hidden" id="tabAudio">
+        <div class="ta-head">
+          <span class="ta-title">playing in your tabs</span>
+          <button class="ta-refresh" id="taRefresh" title="refresh" aria-label="refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+          </button>
+        </div>
+        <div class="ta-list" id="taList"></div>
+      </div>
+
       <div class="media-now">
         <div class="m-art" id="mArtBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
@@ -192,13 +289,6 @@
         <div class="queue-body"><div class="queue-list" id="queueList"></div></div>
       </div>
 
-      <div class="media-foot">
-        <span class="mf-label">wallpaper</span>
-        <div class="mf-btns">
-          <button id="mWall" class="mf-btn">change</button>
-          <button id="mWallReset" class="mf-btn">reset</button>
-        </div>
-      </div>
     </div>
 
     <!-- SYSTEM -->
@@ -434,6 +524,7 @@
   <script src="js/config.js"></script>
   <script src="js/qrcode.min.js"></script>
   <script src="js/theme.js"></script>
+  <script src="js/lyrics.js"></script>
   <script src="js/client/musicApi.js"></script>
   <script src="js/client/musicSource.js"></script>
   <script src="js/commands.js"></script>

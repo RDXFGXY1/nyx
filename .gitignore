@@ -21,6 +21,8 @@ build/
 coverage/
 
 # .NET backend build outputs
+backend/src
+desktop/
 backend/**/bin/
 backend/**/obj/
 backend/.vs/

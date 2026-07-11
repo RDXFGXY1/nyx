@@ -35,6 +35,8 @@ const COMMANDS = [
       CURRENT_VIEW = getTabs()[0].view; renderTabs(); renderGroups();
       toast("tabs reset"); } },
   { cmd: ">dock",        hint: "toggle bottom dock",              run: () => toggleDock() },
+  { cmd: ">visited",     hint: "show / hide the most-visited row", run: () => toggleTopVisible() },
+  { cmd: ">settings",    hint: "open settings (theme, extras, profile)", run: () => openSettings(true) },
   { cmd: ">reset",       hint: "clear all saved settings",        run: () => { localStorage.clear(); location.reload(); } },
   { cmd: ">dim",         hint: ">dim 0.6 — background dim (0.2-1)", arg: true,
     run: (a) => { const v = Math.min(1, Math.max(0.2, parseFloat(a))); if (isNaN(v)) return toast("use 0.2 - 1");
@@ -43,7 +45,6 @@ const COMMANDS = [
     run: (a) => { const v = Math.min(30, Math.max(0, parseInt(a))); if (isNaN(v)) return toast("use 0 - 30");
       document.documentElement.style.setProperty("--blur", v + "px"); localStorage.setItem("blur", v); toast("blur " + v + "px"); } },
   { cmd: ">avatar",      hint: "change profile picture",           run: () => document.getElementById("avatar").click() },
-  { cmd: ">edit",        hint: "edit link groups — add, rename, remove", run: () => toggleEditMode() },
   { cmd: ">links reset", hint: "restore the default link groups",  run: () => {
       localStorage.removeItem("userGroups");
       LIVE_GROUPS = null; renderGroups();

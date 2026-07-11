@@ -38,6 +38,19 @@ class MusicApi {
     return `${this.base}/api/remote/stream/${encodeURIComponent(id)}`;
   }
 
+  /** Start a background download of an online track into the library. */
+  async remoteDownload(id) {
+    const res = await fetch(`${this.base}/api/remote/download/${encodeURIComponent(id)}`, {
+      method: "POST",
+    });
+    return res.ok;
+  }
+
+  /** Poll a download's status: { state: downloading|done|error|idle, percent }. */
+  async remoteDownloadStatus(id) {
+    return this.#json(`/api/remote/download/${encodeURIComponent(id)}/status`);
+  }
+
   // ---- online search (backend resolves via yt-dlp) ----
 
   /**
@@ -110,6 +123,36 @@ class MusicApi {
     } finally {
       clearTimeout(t);
     }
+  }
+
+  // ---- sync bus (browser player <-> desktop HUD) ----
+
+  /** Publish this client's now-playing state to the shared bus. */
+  async syncState(state) {
+    return fetch(`${this.base}/api/sync/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state),
+    });
+  }
+
+  /** Read the shared now-playing state: { state, ageMs } or { none: true }. */
+  async syncGetState(signal) {
+    return this.#json("/api/sync/state", { signal });
+  }
+
+  /** Post a transport command for the current owner to run. */
+  async syncCmd(action, value, from) {
+    return fetch(`${this.base}/api/sync/cmd`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, value: value || 0, from }),
+    });
+  }
+
+  /** Poll for commands newer than `after`: { commands, latest }. */
+  async syncPollCmds(after) {
+    return this.#json(`/api/sync/cmd?after=${after || 0}`);
   }
 
   // ---- internal ----

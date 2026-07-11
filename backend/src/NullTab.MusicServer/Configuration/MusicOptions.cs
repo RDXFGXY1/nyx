@@ -24,8 +24,16 @@ public sealed class MusicOptions
     /// </summary>
     public string[] AllowedOrigins { get; set; } = { "*" };
 
+    public string TyDlpDefaultPath { get; set; } = "~/Downloads/ty-dlp.exe";
+
     /// <summary>Re-scan the library automatically every N minutes. 0 = off.</summary>
     public int RescanMinutes { get; set; } = 0;
+
+    /// <summary>
+    /// Folder the random-wallpaper feature reads. Supports "~".
+    /// Recommended: put all your wallpapers in ~/Pictures/wallpaper.
+    /// </summary>
+    public string WallpaperFolder { get; set; } = "~/Pictures/wallpaper";
 
     /// <summary>
     /// Path to the yt-dlp executable used by /api/remote. A bare

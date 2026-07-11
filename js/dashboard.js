@@ -30,6 +30,8 @@ function setupDashboard() {
   setupSliders();
   setupProfile();
   setupMedia();
+  setupTabAudio();
+  setupSync();
 
   document.addEventListener("keydown", (e) => {
     if (e.altKey && (e.key.toLowerCase() === "d" || e.key.toLowerCase() === "k")) {
@@ -49,6 +51,86 @@ function setupDashTabs() {
         p.classList.toggle("hidden", p.id !== "pane-" + t.dataset.pane)
       );
       if (t.dataset.pane === "system") { refreshSystem(); startSysLoop(); }
+      if (t.dataset.pane === "media") refreshTabAudio();
+    });
+  });
+}
+
+/* ---------- audio playing in your other browser tabs ---------- */
+function taEsc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function setupTabAudio() {
+  const btn = document.getElementById("taRefresh");
+  if (btn) btn.addEventListener("click", refreshTabAudio);
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === "media-changed") refreshTabAudio();
+    });
+  } catch {}
+  refreshTabAudio();
+}
+
+function refreshTabAudio() {
+  const wrap = document.getElementById("tabAudio");
+  if (!wrap) return;
+  try {
+    chrome.runtime.sendMessage({ type: "media-list" }, (res) => {
+      if (chrome.runtime.lastError) { wrap.classList.add("hidden"); return; }
+      renderTabAudio((res && res.tabs) || []);
+    });
+  } catch { wrap.classList.add("hidden"); }
+}
+
+function renderTabAudio(tabs) {
+  const wrap = document.getElementById("tabAudio");
+  const list = document.getElementById("taList");
+  if (!wrap || !list) return;
+  if (!tabs.length) { wrap.classList.add("hidden"); list.innerHTML = ""; return; }
+  wrap.classList.remove("hidden");
+
+  const soundIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>`;
+  const mutedIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m17 9 5 6M22 9l-5 6"/></svg>`;
+  const playIco = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.9l10.2-6.4a1 1 0 0 0 0-1.7L9.5 4.7A1 1 0 0 0 8 5.6z"/></svg>`;
+
+  list.innerHTML = tabs.map((t) => {
+    let host = "";
+    try { host = new URL(t.url).hostname.replace(/^www\./, ""); } catch {}
+    const fav = t.favIconUrl
+      ? `<img class="ta-fav" src="${taEsc(t.favIconUrl)}" alt="" onerror="this.classList.add('ta-fav-x');this.removeAttribute('src')"/>`
+      : `<span class="ta-fav ta-fav-x">♪</span>`;
+    return `
+      <div class="ta-item" data-id="${t.id}">
+        ${fav}
+        <div class="ta-meta" data-act="focus" title="go to this tab">
+          <div class="ta-name">${taEsc(t.title)}</div>
+          <div class="ta-host">${taEsc(host)}</div>
+        </div>
+        <div class="ta-ctl">
+          <button class="ta-btn" data-act="toggle" title="play / pause">${playIco}</button>
+          <button class="ta-btn ${t.muted ? "on" : ""}" data-act="mute" title="${t.muted ? "unmute" : "mute"}">${t.muted ? mutedIco : soundIco}</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  list.querySelectorAll(".ta-item").forEach((it) => {
+    const id = +it.dataset.id;
+    it.querySelector('[data-act="toggle"]').addEventListener("click", () => {
+      try { chrome.runtime.sendMessage({ type: "media-toggle", id }, () => void chrome.runtime.lastError); } catch {}
+    });
+    it.querySelector('[data-act="mute"]').addEventListener("click", (e) => {
+      const on = e.currentTarget.classList.contains("on");
+      try {
+        chrome.runtime.sendMessage({ type: "media-mute", id, muted: !on }, () => {
+          void chrome.runtime.lastError;
+          setTimeout(refreshTabAudio, 150);
+        });
+      } catch {}
+    });
+    it.querySelector('[data-act="focus"]').addEventListener("click", () => {
+      try { chrome.runtime.sendMessage({ type: "media-focus", id }, () => void chrome.runtime.lastError); } catch {}
     });
   });
 }
@@ -156,6 +238,7 @@ function fillSlider(el) {
 
 function setupSliders() {
   const dim = document.getElementById("slDim");
+  if (!dim) return; // theme sliders moved to the settings panel
   const blur = document.getElementById("slBlur");
   const vol = document.getElementById("slVol");
 
@@ -292,6 +375,9 @@ async function searchOnline(q) {
           <span class="stream-dot"></span>
           <span class="stream-name">${escHtml(r.title)}</span>
           <span class="yt-dur">${fmtDur(r.duration)}</span>
+          ${r.inLibrary
+            ? `<span class="in-lib" title="in your library">✓</span>`
+            : `<button class="song-dl" data-i="${i}" title="download to library">⤓</button>`}
           <button class="song-q" data-i="${i}" title="add to queue">＋</button>
         </div>`)
       .join("");
@@ -305,6 +391,12 @@ async function searchOnline(q) {
         enqueue({ name: r.title, src: MusicSource.api.remoteStreamUrl(r.id) });
       })
     );
+    el.querySelectorAll(".song-dl").forEach((b) =>
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        downloadRemote(results[+b.dataset.i], b);
+      })
+    );
   } catch {
     el.innerHTML = `<div class="song-empty">search failed — server running?</div>`;
   }
@@ -312,6 +404,43 @@ async function searchOnline(q) {
 
 function playRemote(r) {
   playStream({ name: r.title, url: MusicSource.api.remoteStreamUrl(r.id), remote: true });
+}
+
+async function downloadRemote(r, btn) {
+  if (typeof MusicSource === "undefined" || !MusicSource.online) {
+    toast("music server offline");
+    return;
+  }
+  if (btn) { btn.textContent = "…"; btn.disabled = true; }
+  toast("downloading " + r.title);
+  try {
+    const started = await MusicSource.api.remoteDownload(r.id);
+    if (!started) throw new Error("start failed");
+
+    // poll progress
+    let done = false;
+    while (!done) {
+      await new Promise((res) => setTimeout(res, 700));
+      const { state, percent, error } = await MusicSource.api.remoteDownloadStatus(r.id);
+      if (state === "downloading") {
+        if (btn) btn.textContent = `${Math.round(percent)}%`;
+      } else if (state === "done") {
+        done = true;
+        if (btn) btn.textContent = "✓";
+        toast("downloaded ✓ — added to library");
+        if (typeof loadServerTracks === "function") loadServerTracks();
+      } else {
+        done = true;
+        if (btn) btn.textContent = "⤓";
+        toast(error ? "download failed: " + error.slice(0, 80) : "download failed");
+      }
+    }
+  } catch {
+    toast("download failed");
+    if (btn) btn.textContent = "⤓";
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* used by the >queue command: search and queue the top hit */
@@ -367,8 +496,8 @@ async function loadServerTracks() {
 }
 
 function setupMedia() {
-  document.getElementById("mWall").addEventListener("click", () => THEME.pickWallpaper());
-  document.getElementById("mWallReset").addEventListener("click", () => THEME.resetWallpaper());
+  document.getElementById("mWall")?.addEventListener("click", () => THEME.pickWallpaper());
+  document.getElementById("mWallReset")?.addEventListener("click", () => THEME.resetWallpaper());
   document.getElementById("mAddSongs").addEventListener("click", addSongs);
   document.getElementById("mClearSongs").addEventListener("click", async () => {
     PLAYER.audio.pause();
@@ -570,6 +699,8 @@ function updateNowPlaying() {
   document.getElementById("mPlay").classList.toggle("playing", playing);
   document.getElementById("mBars").classList.toggle("on", playing);
   document.getElementById("mArtBox").classList.toggle("on", playing);
+  publishMediaSession(song, title, playing);
+  if (typeof LYRICS !== "undefined") LYRICS.onTrack(song, title);
   // dashboard card
   document.getElementById("cmTitle").textContent = title;
   document.getElementById("cmPlay").classList.toggle("playing", playing);
@@ -582,6 +713,120 @@ function updateNowPlaying() {
   } else {
     artEl.style.backgroundImage = "";
   }
+}
+
+/* Publish to the OS media controls (Windows SMTC) so the Nyx Vinyl HUD and the
+   system media flyout see whatever Nyx is playing, and can control it. */
+let MS_WIRED = false;
+function publishMediaSession(song, title, playing) {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    if (!MS_WIRED) {
+      const tap = (id) => () => document.getElementById(id)?.click();
+      navigator.mediaSession.setActionHandler("play", tap("mPlay"));
+      navigator.mediaSession.setActionHandler("pause", tap("mPlay"));
+      navigator.mediaSession.setActionHandler("previoustrack", tap("mPrev"));
+      navigator.mediaSession.setActionHandler("nexttrack", tap("mNext"));
+      MS_WIRED = true;
+    }
+
+    const active = !!song || !!PLAYER.stream;
+    if (active) syncPublishState(song, title, playing);
+    navigator.mediaSession.playbackState = playing ? "playing" : active ? "paused" : "none";
+
+    if (active) {
+      const artwork = [];
+      if (song && song.art) artwork.push({ src: song.art, sizes: "512x512", type: "image/png" });
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: title || "Nyx",
+        artist: (song && song.artist) || (PLAYER.stream && PLAYER.stream.remote ? "online" : "Nyx"),
+        album: (song && song.album) || "Nyx",
+        artwork,
+      });
+
+      const d = PLAYER.audio.duration, p = PLAYER.audio.currentTime;
+      if (isFinite(d) && d > 0 && isFinite(p)) {
+        try { navigator.mediaSession.setPositionState({ duration: d, position: Math.min(p, d), playbackRate: 1 }); } catch {}
+      }
+    }
+  } catch { /* MediaSession unsupported detail — ignore */ }
+}
+
+/* =========================================================
+   Sync bus — keep the browser player and the desktop Vinyl HUD
+   in step through the Nyx server. The browser publishes its
+   now-playing state, and runs transport commands the HUD posts.
+   ========================================================= */
+let SYNC_LASTCMD = 0;
+
+function syncOk() {
+  return typeof MusicSource !== "undefined" && MusicSource.api && MusicSource.online;
+}
+
+function syncPublishState(song, title, playing) {
+  if (!syncOk()) return;
+  const a = PLAYER.audio;
+  MusicSource.api.syncState({
+    owner: "browser",
+    id: song && song.serverId ? song.serverId : "",
+    title: title || "Nyx",
+    artist: (song && song.artist) || (PLAYER.stream && PLAYER.stream.remote ? "online" : ""),
+    album: (song && song.album) || "",
+    duration: Math.round(isFinite(a.duration) ? a.duration : 0),
+    position: isFinite(a.currentTime) ? a.currentTime : 0,
+    playing: !!playing,
+    hasArt: !!(song && song.art),
+    artUrl: song && song.serverId ? MusicSource.api.artUrl(song.serverId) : "",
+  }).catch(() => {});
+}
+
+async function syncPollCommands() {
+  if (!syncOk()) return;
+  try {
+    const { commands, latest } = await MusicSource.api.syncPollCmds(SYNC_LASTCMD);
+    if (typeof latest === "number") SYNC_LASTCMD = Math.max(SYNC_LASTCMD, latest);
+    for (const c of commands || []) {
+      if (c.from === "browser") continue; // don't run our own commands
+      applySyncCommand(c);
+    }
+  } catch {}
+}
+
+function applySyncCommand(c) {
+  const a = PLAYER.audio;
+  const click = (id) => document.getElementById(id)?.click();
+  switch (c.action) {
+    case "toggle": click("mPlay"); break;
+    case "play": if (a.paused) click("mPlay"); break;
+    case "pause": if (!a.paused) click("mPlay"); break;
+    case "next": click("mNext"); break;
+    case "prev": click("mPrev"); break;
+    case "seek":
+      if (isFinite(a.duration) && a.duration > 0) {
+        a.currentTime = Math.max(0, Math.min(c.value, a.duration));
+        updateNowPlaying();
+      }
+      break;
+  }
+}
+
+function setupSync() {
+  // prime the cursor so old commands aren't replayed on load
+  if (typeof MusicSource !== "undefined" && MusicSource.api) {
+    MusicSource.api.syncPollCmds(0)
+      .then((r) => { if (r && typeof r.latest === "number") SYNC_LASTCMD = r.latest; })
+      .catch(() => {});
+  }
+  setInterval(syncPollCommands, 1000);
+  // keep position fresh while playing
+  setInterval(() => {
+    if (!PLAYER.audio.paused && (PLAYER.idx >= 0 || PLAYER.stream)) {
+      const list = playlist();
+      const song = PLAYER.idx >= 0 ? list[PLAYER.idx] : null;
+      const title = PLAYER.stream ? PLAYER.stream.name : song ? song.name : "";
+      syncPublishState(song, title, true);
+    }
+  }, 1500);
 }
 
 /* =========================================================

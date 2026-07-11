@@ -10,6 +10,9 @@ public sealed record Track
     public string Artist { get; init; } = "Unknown Artist";
     public string Album { get; init; } = "Unknown Album";
 
+    /// <summary>Genre from the file's tags (empty if unknown). Used for auto-play matching.</summary>
+    public string Genre { get; init; } = "";
+
     /// <summary>Duration in seconds (0 if unknown).</summary>
     public int Duration { get; init; }
 

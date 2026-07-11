@@ -60,6 +60,14 @@ public sealed class PhoneController : ControllerBase
         return Ok(new { accent = _accent, ink = _ink });
     }
 
+    /// <summary>Same accent, but for same-PC apps (e.g. the Vinyl HUD) — localhost only, no pairing code.</summary>
+    [HttpGet("theme/local")]
+    public IActionResult GetThemeLocal()
+    {
+        if (!IsLocal) return StatusCode(403);
+        return Ok(new { accent = _accent, ink = _ink });
+    }
+
     [HttpPost("send")]
     public IActionResult Send([FromBody] SendDto d, [FromHeader(Name = "X-Phone-Code")] string? header)
     {

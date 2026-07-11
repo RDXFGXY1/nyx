@@ -17,6 +17,13 @@ const THEME = {
       } catch {}
     }
 
+    // random wallpaper from the server's folder (settings toggle)
+    if (localStorage.getItem("randomWall") === "1" && (await this.applyRandomWallpaper())) {
+      const savedAccent = localStorage.getItem("accent");
+      if (savedAccent) this.applyAccentHex(savedAccent);
+      return; // accent otherwise comes from the random wallpaper itself
+    }
+
     try {
       const saved = await idbGet("wallpaper");
       // CSS no longer hardcodes the default, so apply saved OR default here
@@ -29,6 +36,162 @@ const THEME = {
     const savedAccent = localStorage.getItem("accent");
     if (savedAccent) this.applyAccentHex(savedAccent);
     else this.autoAccent();
+  },
+
+  /* ---------- random wallpaper: a folder you PICK (File System Access),
+       or a path the local server reads ---------- */
+  WALL_API: "http://127.0.0.1:5055/api/wallpaper",
+  WALL_IMG_EXT: [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif"],
+  WALL_VID_EXT: [".mp4", ".webm", ".ogg", ".ogv"],
+
+  wallKind(name) {
+    const dot = name.lastIndexOf(".");
+    const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
+    if (this.WALL_IMG_EXT.includes(ext)) return "image";
+    if (this.WALL_VID_EXT.includes(ext)) return "video";
+    return null;
+  },
+
+  // ----- pick a folder with the native OS picker — no path typing -----
+  async chooseWallpaperFolder() {
+    if (!window.showDirectoryPicker) {
+      toast("this browser can't open a folder picker — use the path box");
+      return false;
+    }
+    let handle;
+    try {
+      handle = await window.showDirectoryPicker({ id: "nyx-walls", mode: "read" });
+    } catch { return false; } // user cancelled the dialog
+    await idbSet("wallDirHandle", handle);
+    localStorage.setItem("wallSource", "local");
+    localStorage.setItem("randomWall", "1");
+    const n = await this.countLocal(handle);
+    if (!n) { toast("that folder has no images or videos"); return true; }
+    toast(`folder set — ${n} wallpaper${n !== 1 ? "s" : ""} found`);
+    await this.applyRandomWallpaper(true);
+    return true;
+  },
+
+  async countLocal(handle) {
+    let n = 0;
+    try {
+      for await (const e of handle.values())
+        if (e.kind === "file" && this.wallKind(e.name)) n++;
+    } catch {}
+    return n;
+  },
+
+  async ensurePerm(handle, interactive) {
+    const opts = { mode: "read" };
+    try {
+      if ((await handle.queryPermission(opts)) === "granted") return true;
+      if (interactive && (await handle.requestPermission(opts)) === "granted") return true;
+    } catch {}
+    return false;
+  },
+
+  // ----- apply a random wallpaper from whichever source is configured -----
+  async applyRandomWallpaper(interactive = false) {
+    const source = localStorage.getItem("wallSource") || "server";
+    return source === "local"
+      ? this.applyRandomLocal(interactive)
+      : this.applyRandomServer();
+  },
+
+  async applyRandomLocal(interactive) {
+    try {
+      const handle = await idbGet("wallDirHandle");
+      if (!handle) return false;
+      if (!(await this.ensurePerm(handle, interactive))) {
+        // fresh tab has no click to grant with — show the last one so it isn't blank
+        return this.applyCachedLocal();
+      }
+      const want = localStorage.getItem("randomWallType") || "both";
+      const files = [];
+      for await (const e of handle.values()) {
+        if (e.kind !== "file") continue;
+        const k = this.wallKind(e.name);
+        if (k && (want === "both" || want === k)) files.push({ e, k });
+      }
+      if (!files.length) return false;
+
+      const pick = files[Math.floor(Math.random() * files.length)];
+      const file = await pick.e.getFile();
+      const url = URL.createObjectURL(file);
+      if (pick.k === "video") {
+        this._showVideo(url, false);
+      } else {
+        this._showImage(url);
+        try {
+          const dataUrl = await readFile(file);
+          await idbSet("wallLastData", dataUrl); // cache for no-permission tabs
+          if (!localStorage.getItem("accent")) this.applyAccentRgb(await extractAccent(dataUrl));
+        } catch {}
+      }
+      return true;
+    } catch (e) {
+      console.error("[wallpaper] local random failed:", e);
+      return false;
+    }
+  },
+
+  async applyCachedLocal() {
+    try {
+      const last = await idbGet("wallLastData");
+      if (typeof last === "string") { this._showImage(last); return true; }
+    } catch {}
+    return false;
+  },
+
+  async applyRandomServer() {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+      const res = await fetch(this.WALL_API + "/list", { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) return false;
+      const { exists, images, videos } = await res.json();
+      if (!exists) return false;
+
+      const want = localStorage.getItem("randomWallType") || "both";
+      let pool = [];
+      if (want !== "video") pool = pool.concat(images.map((n) => ({ n, v: false })));
+      if (want !== "image") pool = pool.concat(videos.map((n) => ({ n, v: true })));
+      if (!pool.length) return false;
+
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      const url = this.WALL_API + "/file?name=" + encodeURIComponent(pick.n);
+      if (pick.v) {
+        this._showVideo(url, true);
+      } else {
+        this._showImage(url);
+        if (!localStorage.getItem("accent")) {
+          try { this.applyAccentRgb(await extractAccent(url, true)); } catch {}
+        }
+      }
+      return true;
+    } catch {
+      return false; // server offline — caller falls back to the saved wallpaper
+    }
+  },
+
+  _showImage(url) {
+    const vid = document.getElementById("bgVideo");
+    vid.pause(); vid.removeAttribute("src"); vid.classList.add("hidden");
+    document.getElementById("bg").style.backgroundImage = `url("${url}")`;
+    this._current = { type: "image", data: url, remote: true };
+  },
+
+  _showVideo(url, cors) {
+    const vid = document.getElementById("bgVideo");
+    if (cors) vid.crossOrigin = "anonymous"; else vid.removeAttribute("crossorigin");
+    vid.src = url;
+    vid.classList.remove("hidden");
+    vid.addEventListener("loadeddata", () => {
+      if (!localStorage.getItem("accent")) this.accentFromVideo();
+    }, { once: true });
+    vid.play().catch(() => {});
+    this._current = { type: "video", data: null, remote: true };
   },
 
   // ---------- apply ----------
@@ -209,9 +372,10 @@ function shrinkImage(dataUrl, maxW, quality) {
   });
 }
 
-function extractAccent(src) {
+function extractAccent(src, crossOrigin) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    if (crossOrigin) img.crossOrigin = "anonymous"; // server sends CORS headers
     img.onload = () => {
       try {
         const s = 64;

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using NullTab.MusicServer.Configuration;
+using NullTab.MusicServer.Services;
 
 namespace NullTab.MusicServer.Controllers;
 
@@ -21,14 +22,23 @@ public sealed class RemoteController : ControllerBase
     /// <summary>Resolved direct URLs are IP-locked and expire; cache briefly.</summary>
     private static readonly ConcurrentDictionary<string, (string Url, DateTimeOffset Expires)> UrlCache = new();
 
+    /// <summary>Live download jobs by YouTube id: state (downloading/done/error) + percent + error text.</summary>
+    private static readonly ConcurrentDictionary<string, (string State, double Percent, string Error)> Downloads = new();
+
+    private static readonly System.Text.RegularExpressions.Regex PercentRe =
+        new(@"(\d{1,3}(?:\.\d+)?)%", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     private readonly MusicOptions _opts;
     private readonly IHttpClientFactory _http;
+    private readonly IMusicLibrary _library;
     private readonly ILogger<RemoteController> _log;
 
-    public RemoteController(IOptions<MusicOptions> opts, IHttpClientFactory http, ILogger<RemoteController> log)
+    public RemoteController(IOptions<MusicOptions> opts, IHttpClientFactory http,
+        IMusicLibrary library, ILogger<RemoteController> log)
     {
         _opts = opts.Value;
         _http = http;
+        _library = library;
         _log = log;
     }
 
@@ -46,6 +56,9 @@ public sealed class RemoteController : ControllerBase
         if (stdout is null)
             return StatusCode(502, new { error = "yt-dlp failed — check Music:YtDlpPath" });
 
+        // filenames already in the library, so we can flag results you own
+        var libraryFiles = SafeLibraryFileNames();
+
         var results = new List<object>();
         foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -53,9 +66,10 @@ public sealed class RemoteController : ControllerBase
             {
                 using var doc = JsonDocument.Parse(line);
                 var r = doc.RootElement;
+                string? vid = r.GetProperty("id").GetString();
                 results.Add(new
                 {
-                    id = r.GetProperty("id").GetString(),
+                    id = vid,
                     title = r.TryGetProperty("title", out var t) ? t.GetString() : "untitled",
                     uploader = r.TryGetProperty("channel", out var c) && c.ValueKind == JsonValueKind.String
                         ? c.GetString()
@@ -65,6 +79,7 @@ public sealed class RemoteController : ControllerBase
                     duration = r.TryGetProperty("duration", out var d) && d.ValueKind == JsonValueKind.Number
                         ? (int?)d.GetDouble()
                         : null,
+                    inLibrary = vid != null && libraryFiles.Any(f => f.Contains("[" + vid + "]")),
                 });
             }
             catch
@@ -133,6 +148,128 @@ public sealed class RemoteController : ControllerBase
             upstream.Dispose();
         }
         return new EmptyResult();
+    }
+
+    /// <summary>
+    /// POST /api/remote/download/{id} — start saving a track's audio into the
+    /// library folder (best audio, no re-encode). Runs in the background; poll
+    /// /status for progress. On success the library is rescanned.
+    /// </summary>
+    [HttpPost("download/{id}")]
+    public IActionResult Download(string id)
+    {
+        if (!IsValidId(id)) return BadRequest();
+
+        if (Downloads.TryGetValue(id, out var cur) && cur.State == "downloading")
+            return Ok(new { started = true, already = true });
+
+        Downloads[id] = ("downloading", 0, "");
+        _ = Task.Run(() => RunDownloadJobAsync(id));
+        return Ok(new { started = true });
+    }
+
+    /// <summary>GET /api/remote/download/{id}/status — { state, percent, error }.</summary>
+    [HttpGet("download/{id}/status")]
+    public IActionResult DownloadStatus(string id)
+    {
+        if (Downloads.TryGetValue(id, out var s))
+            return Ok(new { state = s.State, percent = s.Percent, error = s.Error });
+        return Ok(new { state = "idle", percent = 0.0, error = "" });
+    }
+
+    private async Task RunDownloadJobAsync(string id)
+    {
+        try
+        {
+            var dir = _library.LibraryPath;
+            Directory.CreateDirectory(dir);
+            var outTemplate = Path.Combine(dir, "%(title)s [%(id)s].%(ext)s");
+
+            var (ok, error) = await RunYtDlpDownloadAsync(new[]
+            {
+                "--no-playlist", "--newline", "--no-part",
+                "-f", "bestaudio[ext=m4a]/bestaudio/best",
+                "-o", outTemplate,
+                "https://www.youtube.com/watch?v=" + id,
+            }, pct => Downloads[id] = ("downloading", pct, ""));
+
+            if (ok)
+            {
+                await _library.ScanAsync();
+                Downloads[id] = ("done", 100, "");
+            }
+            else
+            {
+                _log.LogWarning("Download of {Id} failed: {Error}", id, error);
+                Downloads[id] = ("error", 0, error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Download job failed for {Id}", id);
+            Downloads[id] = ("error", 0, ex.Message);
+        }
+    }
+
+    private async Task<(bool ok, string error)> RunYtDlpDownloadAsync(string[] args, Action<double> onProgress)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = _opts.YtDlpPath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+
+        var errLines = new List<string>();
+
+        try
+        {
+            using var proc = Process.Start(psi);
+            if (proc is null) return (false, "could not start yt-dlp — check Music:YtDlpPath");
+
+            void Handle(string? line, bool isErr)
+            {
+                if (line is null) return;
+                var m = PercentRe.Match(line);
+                if (m.Success && double.TryParse(m.Groups[1].Value,
+                        System.Globalization.CultureInfo.InvariantCulture, out double p))
+                    onProgress(Math.Clamp(p, 0, 100));
+                if (isErr && line.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
+                    errLines.Add(line.Trim());
+            }
+
+            proc.OutputDataReceived += (_, e) => Handle(e.Data, false);
+            proc.ErrorDataReceived += (_, e) => Handle(e.Data, true);
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+
+            await proc.WaitForExitAsync();
+
+            if (proc.ExitCode == 0) return (true, "");
+            string err = errLines.Count > 0 ? errLines[^1] : $"yt-dlp exited with code {proc.ExitCode}";
+            return (false, err);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Could not run yt-dlp download at '{Path}'", _opts.YtDlpPath);
+            return (false, ex.Message);
+        }
+    }
+
+    private List<string> SafeLibraryFileNames()
+    {
+        try
+        {
+            var dir = _library.LibraryPath;
+            if (!Directory.Exists(dir)) return new();
+            return Directory.EnumerateFiles(dir).Select(Path.GetFileName).Where(n => n != null).ToList()!;
+        }
+        catch { return new(); }
     }
 
     // ---- internals ----

@@ -190,6 +190,71 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 });
 
 /* =========================================================
+   Media across tabs — the new-tab dashboard lists tabs that
+   are producing sound and can play/pause/mute/focus them.
+   Uses only the "tabs" permission (already granted): query for
+   audible tabs, mute via tabs.update, play/pause by relaying to
+   the mediaControl.js content script already on every page.
+   ========================================================= */
+function listMediaTabs(sendResponse) {
+  chrome.tabs.query({}, (tabs) => {
+    const list = (tabs || [])
+      .filter(
+        (t) =>
+          t.audible ||
+          (t.mutedInfo && t.mutedInfo.muted && t.mutedInfo.reason === "extension")
+      )
+      .map((t) => ({
+        id: t.id,
+        title: t.title || "audio",
+        url: t.url || "",
+        favIconUrl: t.favIconUrl || "",
+        audible: !!t.audible,
+        muted: !!(t.mutedInfo && t.mutedInfo.muted),
+      }));
+    sendResponse({ tabs: list });
+  });
+}
+
+// tell any open new-tab dashboard to refresh when sound starts / stops
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.audible !== undefined || changeInfo.mutedInfo !== undefined) {
+    try { chrome.runtime.sendMessage({ type: "media-changed" }).catch(() => {}); } catch {}
+  }
+});
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg) return;
+
+  if (msg.type === "media-list") {
+    listMediaTabs(sendResponse);
+    return true;
+  }
+  if (msg.type === "media-toggle") {
+    chrome.tabs.sendMessage(msg.id, { type: "nyx-media", action: "toggle" }, (res) => {
+      void chrome.runtime.lastError;
+      sendResponse(res || { ok: false });
+    });
+    return true;
+  }
+  if (msg.type === "media-mute") {
+    chrome.tabs.update(msg.id, { muted: !!msg.muted }, () => {
+      void chrome.runtime.lastError;
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+  if (msg.type === "media-focus") {
+    chrome.tabs.update(msg.id, { active: true }, (t) => {
+      void chrome.runtime.lastError;
+      if (t && t.windowId != null) chrome.windows.update(t.windowId, { focused: true });
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+});
+
+/* =========================================================
    Password vault relay — the content script has no token and
    is subject to CORS, so it talks to the vault THROUGH us.
    The token lives in chrome.storage (web pages can't read it).
