@@ -927,7 +927,10 @@ setupCommands();
 setupDashboard();
 setupExtras();
 setupStash();
+setupTranslate();
 setupVault();
+setupWhatsNew();
+setupUpdateCheck();
 setupMusicLinkGuard();
 setupTopSites();
 setupWxPop();
@@ -1030,17 +1033,19 @@ function musicPlaying() {
   return typeof PLAYER !== "undefined" && PLAYER.audio && !PLAYER.audio.paused &&
     (PLAYER.idx >= 0 || PLAYER.stream);
 }
+function openInNewTab() { return localStorage.getItem("openNewTab") === "1"; }
+
 function goTo(url) {
-  if (musicPlaying()) {
+  if (musicPlaying() || openInNewTab()) {
     try { chrome.tabs.create({ url }); return; } catch { window.open(url, "_blank"); return; }
   }
   window.location.href = url;
 }
 
-/* clicking a link/dock/top-site tile while music plays opens it in a new tab */
+/* open link tiles in a new tab when music is playing OR the setting is on */
 function setupMusicLinkGuard() {
   document.addEventListener("click", (e) => {
-    if (!musicPlaying()) return;
+    if (!musicPlaying() && !openInNewTab()) return;
     const a = e.target.closest("a.link, a.dock-link, a.top-tile");
     if (!a || !a.href || a.target === "_blank" || a.dataset.noclick) return;
     e.preventDefault();

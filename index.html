@@ -76,6 +76,21 @@
       </div>
       <div class="set-body">
         <div class="set-section">
+          <div class="set-label">display</div>
+          <div class="set-row"><span>size</span>
+            <div class="set-seg" id="setSize">
+              <button data-v="s">S</button><button data-v="m">M</button><button data-v="l">L</button>
+            </div>
+          </div>
+          <div class="set-row"><span>weight</span>
+            <div class="set-seg" id="setWeight">
+              <button data-v="normal">Normal</button><button data-v="bold">Bold</button>
+            </div>
+          </div>
+          <div class="set-row"><span>board width <b id="colwVal">240px</b></span><input type="range" id="setColW" class="set-range" min="170" max="330" step="2" /></div>
+          <label class="set-toggle"><span>open links in a new tab</span><input type="checkbox" id="setNewTab" /><i class="tgl"></i></label>
+        </div>
+        <div class="set-section">
           <div class="set-label">appearance</div>
           <div class="set-row"><span>wallpaper</span><div class="set-inline"><button class="set-btn" id="setWall">change</button><button class="set-btn" id="setWallReset">reset</button></div></div>
           <label class="set-toggle"><span>random wallpaper (each new tab)</span><input type="checkbox" id="setRandomWall" /><i class="tgl"></i></label>
@@ -131,6 +146,7 @@
                 <option value="accent">accent</option>
               </select>
             </div>
+            <div class="set-row"><span>sync offset <b id="lyricsOffsetVal">0.0s</b></span><input type="range" id="setLyricsOffset" class="set-range" min="-5" max="5" step="0.25" /></div>
             <div class="set-row"><span>font</span>
               <div class="set-inline">
                 <button class="set-btn" id="setLyricsFont">upload…</button>
@@ -139,6 +155,11 @@
             </div>
             <div class="set-hint" id="lyricsFontHint">upload a .ttf / .otf / .woff to style the lyrics</div>
           </div>
+        </div>
+        <div class="set-section">
+          <div class="set-label">playback</div>
+          <div class="set-row"><span>crossfade <b id="crossfadeVal">off</b></span><input type="range" id="setCrossfade" class="set-range" min="0" max="12" step="1" /></div>
+          <div class="set-hint">smoothly blend one song into the next</div>
         </div>
         <div class="set-section">
           <div class="set-label">extras</div>
@@ -269,6 +290,7 @@
       </div>
 
       <div class="src-view" id="srcLibrary">
+        <div class="smart-lists hidden" id="smartLists"></div>
         <div class="song-list" id="songList"></div>
       </div>
 
@@ -278,6 +300,13 @@
           <button id="ytSearchBtn">search</button>
         </div>
         <div class="stream-list" id="ytResults"></div>
+        <div class="dl-wrap hidden" id="dlWrap">
+          <div class="dl-head">
+            <span class="dl-title">downloads <span class="dl-badge" id="dlCount">0</span></span>
+            <button class="dl-clear" id="dlClear">clear done</button>
+          </div>
+          <div class="dl-list" id="dlList"></div>
+        </div>
       </div>
 
       <div class="queue-wrap hidden" id="queueWrap">
@@ -439,32 +468,54 @@
       <div class="stash-head">
         <h2 class="stash-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
-          saved <span class="stash-n" id="stashCount">0</span>
+          bookmarks <span class="stash-n" id="stashCount">0</span>
         </h2>
-        <input id="stashSearch" class="stash-search" placeholder="search saved…" spellcheck="false" />
+        <input id="stashSearch" class="stash-search" placeholder="search all bookmarks…" spellcheck="false" />
         <button class="stash-close" id="stashClose" aria-label="close">✕</button>
       </div>
 
+      <!-- breadcrumb: where you are in the bookmark tree -->
+      <div class="bm-bar">
+        <button class="bm-up" id="bmUp" title="up one folder">↑</button>
+        <div class="bm-crumbs" id="bmCrumbs"></div>
+      </div>
+
       <div class="stash-form">
-        <input id="stashName" placeholder="name — movie, article, thing…" spellcheck="false" />
-        <input id="stashUrl" placeholder="link (optional)" spellcheck="false" />
-        <button id="stashAdd">save</button>
-      </div>
-
-      <div class="stash-tagrow">
-        <span class="stash-taglabel">category</span>
-        <select id="stashCatSel" class="stash-catsel"></select>
-        <input id="stashNewCat" class="stash-newtag" placeholder="new category name" spellcheck="false" style="display:none" />
-        <button id="stashEditTags" class="stash-edittags" title="manage categories">⚙</button>
-        <div class="stash-sel" id="stashSel"></div>
-      </div>
-
-      <div class="stash-filterrow">
-        <span class="stash-taglabel">show</span>
-        <select id="stashFilter" class="stash-catsel"></select>
+        <input id="stashName" placeholder="title" spellcheck="false" />
+        <input id="stashUrl" placeholder="link — leave empty to create a folder" spellcheck="false" />
+        <button id="stashAdd">add</button>
       </div>
 
       <div class="stash-grid" id="stashGrid"></div>
+    </div>
+  </div>
+
+  <!-- TRANSLATE MODE — quick translator (Alt+G / >translate) -->
+  <div class="stash-mode hidden" id="translate">
+    <div class="stash-inner tr-inner">
+      <div class="stash-head">
+        <h2 class="stash-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7M9 3v2c0 4-2 7-5 8"/><path d="M5 9c0 3 3 5 6 6"/><path d="M13 19l4-9 4 9M14.5 16h5"/></svg>
+          translate
+        </h2>
+        <button class="stash-close" id="trClose" aria-label="close">✕</button>
+      </div>
+
+      <div class="tr-langbar">
+        <select id="trFrom" class="tr-langsel"></select>
+        <button id="trSwap" class="tr-swap" title="swap languages">⇄</button>
+        <select id="trTo" class="tr-langsel"></select>
+      </div>
+
+      <div class="tr-cols">
+        <textarea id="trInput" class="tr-input" placeholder="type or paste text…" spellcheck="false"></textarea>
+        <div class="tr-output" id="trOutput" data-empty="translation appears here"></div>
+      </div>
+
+      <div class="tr-foot">
+        <span class="tr-status" id="trStatus"></span>
+        <button id="trCopy" class="tr-copy">copy</button>
+      </div>
     </div>
   </div>
 
@@ -531,7 +582,11 @@
   <script src="js/dashboard.js"></script>
   <script src="js/extras.js"></script>
   <script src="js/stashCore.js"></script>
+  <script src="js/bookmarksCore.js"></script>
   <script src="js/stash.js"></script>
+  <script src="js/translate.js"></script>
+  <script src="js/whatsnew.js"></script>
+  <script src="js/updatecheck.js"></script>
   <script src="js/vault.js"></script>
   <script src="js/app.js"></script>
 </body>

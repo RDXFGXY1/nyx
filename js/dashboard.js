@@ -280,7 +280,47 @@ function buildDockLinks() {
 /* =========================================================
    MEDIA pane — wallpaper buttons + local music player
    ========================================================= */
-const PLAYER = { songs: [], server: [], idx: -1, stream: null, queue: [], audio: new Audio() };
+const PLAYER = { songs: [], server: [], idx: -1, stream: null, queue: [], _a: new Audio(), _b: new Audio(), audio: null };
+PLAYER.audio = PLAYER._a; // .audio always points at the ACTIVE element (A/B swap on crossfade)
+
+/* ---------- crossfade ---------- */
+function crossfadeSecs() { return parseFloat(localStorage.getItem("crossfade") || 0); }
+function crossfadeOn() { return crossfadeSecs() > 0; }
+
+function fadeTo(audio, target, secs, onDone) {
+  if (audio._fade) clearInterval(audio._fade);
+  const steps = Math.max(1, Math.round((secs * 1000) / 50));
+  const from = audio.volume, delta = target - from;
+  let i = 0;
+  audio._fade = setInterval(() => {
+    i++;
+    audio.volume = Math.max(0, Math.min(1, from + delta * (i / steps)));
+    if (i >= steps) { clearInterval(audio._fade); audio._fade = null; if (onDone) onDone(); }
+  }, 50);
+}
+
+/* play a src on the player — crossfading from the current track when enabled */
+function playSrc(src) {
+  const cur = PLAYER.audio;
+  const isPlaying = cur.src && !cur.paused && cur.currentTime > 0.2;
+  if (crossfadeOn() && isPlaying) {
+    const secs = crossfadeSecs();
+    const incoming = cur === PLAYER._a ? PLAYER._b : PLAYER._a;
+    fadeTo(cur, 0, secs, () => cur.pause());          // fade the old one out
+    if (incoming._fade) clearInterval(incoming._fade);
+    incoming.src = src;
+    incoming.currentTime = 0;
+    incoming.volume = 0;
+    incoming.play().catch(() => {});
+    fadeTo(incoming, 1, secs);                         // fade the new one in
+    PLAYER.audio = incoming;
+  } else {
+    if (cur._fade) clearInterval(cur._fade);
+    cur.volume = 1;
+    cur.src = src;
+    cur.play().catch(() => {});
+  }
+}
 
 /* ----- queue: songs wait in line, play one after another ----- */
 function enqueue(item) {
@@ -293,8 +333,7 @@ function enqueue(item) {
 function playQueuedItem(item) {
   PLAYER.stream = { name: item.name, remote: true };
   PLAYER.idx = -1;
-  PLAYER.audio.src = item.src;
-  PLAYER.audio.play().catch(() => {});
+  playSrc(item.src);
   renderSongs();
   updateNowPlaying();
 }
@@ -335,10 +374,8 @@ function songToQueueItem(s) {
 function playStream(s) {
   PLAYER.stream = s;
   PLAYER.idx = -1;
-  PLAYER.audio.src = s.url;
-  PLAYER.audio.play()
-    .then(() => toast("streaming · " + s.name))
-    .catch(() => { toast("stream failed"); PLAYER.stream = null; });
+  playSrc(s.url);
+  toast("streaming · " + s.name);
   renderSongs();
   updateNowPlaying();
 }
@@ -414,8 +451,9 @@ async function downloadRemote(r, btn) {
   if (btn) { btn.textContent = "…"; btn.disabled = true; }
   toast("downloading " + r.title);
   try {
-    const started = await MusicSource.api.remoteDownload(r.id);
+    const started = await MusicSource.api.remoteDownload(r.id, r.title);
     if (!started) throw new Error("start failed");
+    startDownloadsPoll();
 
     // poll progress
     let done = false;
@@ -441,6 +479,44 @@ async function downloadRemote(r, btn) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+/* ---------- download queue panel ---------- */
+let DL_POLL = null;
+
+async function renderDownloads() {
+  const wrap = document.getElementById("dlWrap");
+  if (!wrap || typeof MusicSource === "undefined" || !MusicSource.api) return false;
+  let jobs = [];
+  try { jobs = (await MusicSource.api.remoteDownloads()).jobs || []; } catch { wrap.classList.add("hidden"); return false; }
+
+  if (!jobs.length) { wrap.classList.add("hidden"); return false; }
+  wrap.classList.remove("hidden");
+  document.getElementById("dlCount").textContent = jobs.length;
+
+  const icon = (s) => (s === "done" ? "✓" : s === "error" ? "✕" : "");
+  document.getElementById("dlList").innerHTML = jobs.map((j) => {
+    const pct = j.state === "done" ? 100 : Math.round(j.percent || 0);
+    const status = j.state === "downloading" ? pct + "%" : j.state === "done" ? "done" : "failed";
+    return `
+      <div class="dl-row dl-${j.state}">
+        <div class="dl-top"><span class="dl-name">${escHtml(j.title)}</span><span class="dl-pct">${icon(j.state)}${status}</span></div>
+        <div class="dl-bar"><i style="width:${pct}%"></i></div>
+        ${j.state === "error" && j.error ? `<div class="dl-err">${escHtml(j.error.slice(0, 90))}</div>` : ""}
+      </div>`;
+  }).join("");
+
+  return jobs.some((j) => j.state === "downloading");
+}
+
+function startDownloadsPoll() {
+  if (DL_POLL) return;
+  const tick = async () => {
+    const active = await renderDownloads();
+    if (!active) { clearInterval(DL_POLL); DL_POLL = null; }
+  };
+  renderDownloads();
+  DL_POLL = setInterval(tick, 1200);
 }
 
 /* used by the >queue command: search and queue the top hit */
@@ -488,11 +564,59 @@ async function loadServerTracks() {
       serverId: t.id,
       art: t.art,
       duration: t.duration,
+      genre: t.genre || "",
+      artist: t.artist || "",
     }));
     const sub = document.querySelector(".cm-sub");
     if (sub) sub.textContent = `music server · ${PLAYER.server.length} tracks`;
+    renderSmartLists();
     renderSongs();
   } catch { /* server offline — local player carries on */ }
+}
+
+/* ---------- smart playlists (auto-grouped from your library) ---------- */
+function renderSmartLists() {
+  const el = document.getElementById("smartLists");
+  if (!el) return;
+  const lib = PLAYER.server || [];
+  if (!lib.length) { el.classList.add("hidden"); return; }
+
+  const byGenre = {};
+  for (const t of lib) {
+    const g = (t.genre || "").trim();
+    if (g) (byGenre[g] = byGenre[g] || []).push(t);
+  }
+  const genres = Object.keys(byGenre).sort((a, b) => byGenre[b].length - byGenre[a].length);
+
+  const chips = [`<button class="smart-chip smart-all" data-g="__all">✦ shuffle all <b>${lib.length}</b></button>`];
+  for (const g of genres) {
+    if (byGenre[g].length < 2) continue; // skip tiny one-off groups
+    chips.push(`<button class="smart-chip" data-g="${escHtml(g)}">${escHtml(g)} <b>${byGenre[g].length}</b></button>`);
+  }
+  el.innerHTML = `<div class="smart-label">smart playlists</div><div class="smart-chips">${chips.join("")}</div>`;
+  el.classList.remove("hidden");
+
+  el.querySelectorAll(".smart-chip").forEach((b) =>
+    b.addEventListener("click", () => {
+      const g = b.dataset.g;
+      playSmart(g === "__all" ? lib : byGenre[g], true);
+    })
+  );
+}
+
+function playSmart(tracks, shuffle) {
+  if (!tracks || !tracks.length) return;
+  const list = tracks.slice();
+  if (shuffle) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+  }
+  PLAYER.queue = list.map(songToQueueItem);
+  renderQueue();
+  playFromQueue();          // plays the first, the rest wait in the queue
+  toast(`playing ${list.length} track${list.length !== 1 ? "s" : ""}`);
 }
 
 function setupMedia() {
@@ -521,7 +645,12 @@ function setupMedia() {
     if (PLAYER.audio.paused) PLAYER.audio.play(); else PLAYER.audio.pause();
   });
 
-  PLAYER.audio.addEventListener("ended", () => {
+  // bind to BOTH audio elements, but only act for the currently-active one
+  const bindAudio = (ev, fn) =>
+    [PLAYER._a, PLAYER._b].forEach((a) =>
+      a.addEventListener(ev, (e) => { if (e.currentTarget === PLAYER.audio) fn(e); }));
+
+  bindAudio("ended", () => {
     if (PLAYER.queue.length) return playFromQueue();
     if (!PLAYER.stream) playIndex(PLAYER.idx + 1);
   });
@@ -540,8 +669,8 @@ function setupMedia() {
   const qt = document.getElementById("queueToggle");
   qt.addEventListener("click", qToggle);
   qt.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); qToggle(); } });
-  PLAYER.audio.addEventListener("play", updateNowPlaying);
-  PLAYER.audio.addEventListener("pause", updateNowPlaying);
+  bindAudio("play", updateNowPlaying);
+  bindAudio("pause", updateNowPlaying);
 
   // progress + seek
   const seek = document.getElementById("mSeek");
@@ -555,15 +684,23 @@ function setupMedia() {
       const p = (PLAYER.audio.currentTime / d) * 100;
       seek.value = p * 10;
       seek.style.setProperty("--p", p + "%");
+
+      // crossfade: start the next track a few seconds before this one ends
+      if (crossfadeOn() && PLAYER.idx >= 0 && !PLAYER.stream && !PLAYER._xfArmed
+          && playlist().length > 1 && d - PLAYER.audio.currentTime <= crossfadeSecs()) {
+        PLAYER._xfArmed = true;
+        playIndex(PLAYER.idx + 1);
+        setTimeout(() => { PLAYER._xfArmed = false; }, crossfadeSecs() * 1000 + 600);
+      }
     } else {
       durEl.textContent = "–:––";
       seek.value = 0;
       seek.style.setProperty("--p", "0%");
     }
   };
-  PLAYER.audio.addEventListener("timeupdate", setProg);
-  PLAYER.audio.addEventListener("loadedmetadata", setProg);
-  PLAYER.audio.addEventListener("emptied", setProg);
+  bindAudio("timeupdate", setProg);
+  bindAudio("loadedmetadata", setProg);
+  bindAudio("emptied", setProg);
   seek.addEventListener("input", () => {
     const d = PLAYER.audio.duration;
     if (isFinite(d) && d > 0) PLAYER.audio.currentTime = (seek.value / 1000) * d;
@@ -576,9 +713,15 @@ function setupMedia() {
       document.getElementById("srcLibrary").classList.toggle("hidden", b.dataset.src !== "library");
       document.getElementById("srcOnline").classList.toggle("hidden", b.dataset.src !== "online");
       document.getElementById("libActs").classList.toggle("hidden", b.dataset.src !== "library");
-      if (b.dataset.src === "online") document.getElementById("ytQuery").focus();
+      if (b.dataset.src === "online") { document.getElementById("ytQuery").focus(); renderDownloads(); }
     })
   );
+
+  // download queue: clear finished/failed
+  document.getElementById("dlClear").addEventListener("click", async () => {
+    try { await MusicSource.api.remoteDownloadsClear(); } catch {}
+    renderDownloads();
+  });
 
   // online search
   const ytQ = document.getElementById("ytQuery");
@@ -650,10 +793,7 @@ function playIndex(i) {
   PLAYER.stream = null;
   PLAYER.idx = (i + list.length) % list.length;
   const song = list[PLAYER.idx];
-  PLAYER.audio.src = song.serverId
-    ? MusicSource.api.streamUrl(song.serverId)
-    : URL.createObjectURL(song.blob);
-  PLAYER.audio.play().catch(() => {});
+  playSrc(song.serverId ? MusicSource.api.streamUrl(song.serverId) : URL.createObjectURL(song.blob));
   renderSongs();
   updateNowPlaying();
 }

@@ -117,7 +117,8 @@ const LYRICS = {
     const tick = () => {
       const a = typeof PLAYER !== "undefined" && PLAYER.audio; // PLAYER is a global const, not on window
       if (a && this.lines.length && isFinite(a.currentTime)) {
-        const now = a.currentTime + 0.15; // tiny lead so the line lands on the beat
+        const offset = parseFloat(localStorage.getItem("lyricsOffset") || 0);
+        const now = a.currentTime + 0.15 + offset; // +offset shows lines earlier (for sped-up remixes)
         let lo = 0, hi = this.lines.length - 1, found = -1;
         while (lo <= hi) {
           const mid = (lo + hi) >> 1;

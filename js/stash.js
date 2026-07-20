@@ -1,12 +1,14 @@
 /* =========================================================
-   stash.js — "saved things" mode (new-tab board).
-   Categories are picked from a dropdown; items can hold more
-   than one. An "untagged" bucket, a filter dropdown, and live
-   sync when the popup / in-page card saves from elsewhere.
+   stash.js — the "bookmarks" mode (new-tab board).
+
+   Browses your REAL browser bookmarks: folders you already have
+   show up as folders, and nothing is ever wiped. Click a folder
+   to go in, use the breadcrumb / ↑ to come back, search to look
+   across every bookmark at once.
    Open with the bookmark button, Alt+S, or >stash.
    ========================================================= */
 
-const STASH = { filter: "all", q: "", sel: new Set(), manage: false };
+const STASH = { folder: BookmarksCore.ROOT, q: "" };
 
 function openStash(force) {
   const el = document.getElementById("stash");
@@ -16,143 +18,162 @@ function openStash(force) {
   if (show) { renderStash(); document.getElementById("stashName").focus(); }
 }
 
-/* quick-save from the ">save" command (no category) */
-function quickSaveStash(text) {
-  text = (text || "").trim();
-  if (!text) return toast("save what?");
-  let name = text, url = "";
-  if (/^https?:\/\//i.test(text)) {
-    url = text;
-    try { name = new URL(text).hostname.replace(/^www\./, ""); } catch {}
-  }
-  StashCore.addItem({ id: StashCore.newId(), name, url, tags: [], done: false, added: Date.now() });
-  if (!document.getElementById("stash").classList.contains("hidden")) renderStash();
-  toast("saved · " + name);
+/* You can't create anything directly in the invisible root. */
+function stashParent() {
+  return STASH.folder === BookmarksCore.ROOT ? BookmarksCore.DEFAULT_PARENT : STASH.folder;
 }
 
-function addStashItem() {
+/* quick-save from the ">save" command */
+async function quickSaveStash(text) {
+  text = (text || "").trim();
+  if (!text) return toast("save what?");
+  let title = text, url = "";
+  if (/^https?:\/\//i.test(text)) {
+    url = text;
+    try { title = new URL(text).hostname.replace(/^www\./, ""); } catch {}
+  } else {
+    return toast("give me a link to bookmark");
+  }
+  await BookmarksCore.create({ parentId: stashParent(), title, url });
+  if (!document.getElementById("stash").classList.contains("hidden")) renderStash();
+  toast("bookmarked · " + title);
+}
+
+/* the add row: a link makes a bookmark, an empty link makes a folder */
+async function addStashItem() {
   const nameEl = document.getElementById("stashName");
   const urlEl = document.getElementById("stashUrl");
-  const name = nameEl.value.trim();
+  const title = nameEl.value.trim();
   let url = urlEl.value.trim();
-  if (!name && !url) return toast("give it a name");
+
+  if (!title && !url) return toast("give it a title");
   if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
-  StashCore.addItem({
-    id: StashCore.newId(),
-    name: name || url,
-    url,
-    tags: [...STASH.sel],
-    done: false,
-    added: Date.now(),
-  });
-  nameEl.value = ""; urlEl.value = ""; // keep selected categories for fast repeat
+
+  const made = url
+    ? await BookmarksCore.create({ parentId: stashParent(), title: title || url, url })
+    : await BookmarksCore.create({ parentId: stashParent(), title });
+
+  if (!made) return toast("couldn't add that");
+  nameEl.value = ""; urlEl.value = "";
+  toast(url ? "bookmarked" : "folder created");
   renderStash();
   nameEl.focus();
 }
 
-/* the add-category dropdown + selected chips (and manage mode) */
-function renderCatControls() {
-  const cats = StashCore.loadTags();
-
-  const dd = document.getElementById("stashCatSel");
-  const unpicked = cats.filter((c) => !STASH.sel.has(c));
-  dd.innerHTML =
-    `<option value="">＋ add category…</option>` +
-    unpicked.map((c) => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join("") +
-    `<option value="__new">✚ new category…</option>`;
-
-  const sel = document.getElementById("stashSel");
-  if (STASH.manage) {
-    // manage mode: every category with an ✕ to delete from the master list
-    sel.innerHTML = cats.length
-      ? cats.map((c) => `<span class="selchip manage">${escHtml(c)}<button class="selx" data-del="${escHtml(c)}">✕</button></span>`).join("")
-      : `<span class="pick-empty">no categories — add one</span>`;
-    sel.querySelectorAll(".selx").forEach((b) =>
-      b.addEventListener("click", () => {
-        StashCore.removeTag(b.dataset.del);
-        STASH.sel.delete(b.dataset.del);
-        renderCatControls();
-      })
-    );
-  } else {
-    // normal: the categories chosen for the next item
-    sel.innerHTML = [...STASH.sel]
-      .map((c) => `<span class="selchip">${escHtml(c)}<button class="selx" data-rm="${escHtml(c)}">✕</button></span>`)
-      .join("");
-    sel.querySelectorAll(".selx").forEach((b) =>
-      b.addEventListener("click", () => { STASH.sel.delete(b.dataset.rm); renderCatControls(); })
-    );
-  }
-}
-
-function usedTags(items) {
-  const s = new Set();
-  items.forEach((i) => (i.tags || []).forEach((t) => s.add(t)));
-  return [...s];
-}
-
-function renderStash() {
-  const items = StashCore.loadItems();
-  document.getElementById("stashCount").textContent = items.length;
-
-  renderCatControls();
-
-  // filter dropdown: all · each used category · untagged
-  const hasUntagged = items.some((i) => !i.tags || !i.tags.length);
-  const opts = ["all", ...usedTags(items).sort()];
-  if (hasUntagged) opts.push("untagged");
-  const fdd = document.getElementById("stashFilter");
-  fdd.innerHTML = opts
-    .map((c) => `<option value="${escHtml(c)}" ${STASH.filter === c ? "selected" : ""}>${c === "all" ? "all categories" : escHtml(c)}</option>`)
+function renderCrumbs(trail) {
+  const bar = document.getElementById("bmCrumbs");
+  const parts = [{ id: BookmarksCore.ROOT, title: "all bookmarks" }, ...trail];
+  bar.innerHTML = parts
+    .map((p, i) => {
+      const last = i === parts.length - 1;
+      return `<button class="crumb ${last ? "on" : ""}" data-go="${escHtml(p.id)}">${escHtml(p.title)}</button>` +
+             (last ? "" : `<span class="crumb-sep">›</span>`);
+    })
     .join("");
+  bar.querySelectorAll(".crumb").forEach((b) =>
+    b.addEventListener("click", () => { STASH.folder = b.dataset.go; STASH.q = ""; document.getElementById("stashSearch").value = ""; renderStash(); })
+  );
+  document.getElementById("bmUp").style.visibility = trail.length ? "visible" : "hidden";
+}
 
-  // filter the list
-  let list = items;
-  if (STASH.filter === "untagged") list = list.filter((i) => !i.tags || !i.tags.length);
-  else if (STASH.filter !== "all") list = list.filter((i) => (i.tags || []).includes(STASH.filter));
-  if (STASH.q) list = list.filter((i) => i.name.toLowerCase().includes(STASH.q));
-
+async function renderStash() {
   const grid = document.getElementById("stashGrid");
-  if (!list.length) {
-    grid.innerHTML = `<div class="stash-empty">nothing here — save something above ↑, or right-click text/links on any page</div>`;
+  const countEl = document.getElementById("stashCount");
+
+  if (!BookmarksCore.hasApi()) {
+    grid.innerHTML = `<div class="stash-empty">bookmarks aren't available here — reload the extension so it can pick up the new permission</div>`;
     return;
   }
 
-  grid.innerHTML = list
-    .map((i) => {
-      const fav = i.url ? favicon(i.url) : null;
-      const ico = fav
-        ? `<img src="${fav}" alt="" loading="lazy">`
-        : `<span>${escHtml((i.name[0] || "?").toUpperCase())}</span>`;
-      const tags = (i.tags && i.tags.length)
-        ? i.tags.map((t) => `<span class="sc-tag">${escHtml(t)}</span>`).join("")
-        : `<span class="sc-tag untagged">untagged</span>`;
-      return `
-      <div class="stash-card ${i.done ? "done" : ""}" data-id="${i.id}">
-        <div class="sc-ico">${ico}</div>
+  const searching = !!STASH.q;
+  const nodes = searching
+    ? await BookmarksCore.search(STASH.q)
+    : await BookmarksCore.children(STASH.folder);
+
+  renderCrumbs(searching ? [] : await BookmarksCore.path(STASH.folder));
+  document.querySelector(".bm-bar").classList.toggle("searching", searching);
+
+  const folders = nodes.filter((n) => BookmarksCore.isFolder(n));
+  const links = nodes.filter((n) => !BookmarksCore.isFolder(n));
+  countEl.textContent = links.length;
+
+  if (!nodes.length) {
+    grid.innerHTML = `<div class="stash-empty">${
+      searching ? "nothing matches that" : "this folder is empty — add a link above ↑"
+    }</div>`;
+    return;
+  }
+
+  // folders first, then links — folders carry a child count
+  const counts = await Promise.all(folders.map((f) => BookmarksCore.countUnder(f.id)));
+
+  grid.innerHTML =
+    folders
+      .map((f, i) => `
+      <div class="stash-card folder" data-folder="${escHtml(f.id)}">
+        <div class="sc-ico folder-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </div>
         <div class="sc-body">
-          <div class="sc-name">${escHtml(i.name)}</div>
-          <div class="sc-tags">${tags}</div>
+          <div class="sc-name">${escHtml(f.title || "(untitled)")}</div>
+          <div class="sc-sub">${counts[i]} bookmark${counts[i] === 1 ? "" : "s"}</div>
         </div>
         <div class="sc-actions">
-          ${i.url ? `<a class="sc-open" href="${escHtml(i.url)}" title="open">↗</a>` : ""}
-          <button class="sc-done" data-id="${i.id}" title="mark done">✓</button>
-          <button class="sc-del" data-id="${i.id}" title="remove">✕</button>
+          <button class="sc-del" data-deltree="${escHtml(f.id)}" title="delete folder">✕</button>
         </div>
-      </div>`;
-    })
-    .join("");
+      </div>`)
+      .join("") +
+    links
+      .map((b) => {
+        const fav = b.url ? favicon(b.url) : null;
+        let host = "";
+        try { host = new URL(b.url).hostname.replace(/^www\./, ""); } catch {}
+        const ico = fav
+          ? `<img src="${fav}" alt="" loading="lazy">`
+          : `<span>${escHtml((b.title[0] || "?").toUpperCase())}</span>`;
+        return `
+      <a class="stash-card link" href="${escHtml(b.url)}" data-id="${escHtml(b.id)}">
+        <div class="sc-ico">${ico}</div>
+        <div class="sc-body">
+          <div class="sc-name">${escHtml(b.title || host || b.url)}</div>
+          <div class="sc-sub">${escHtml(host)}</div>
+        </div>
+        <div class="sc-actions">
+          <button class="sc-del" data-del="${escHtml(b.id)}" title="remove">✕</button>
+        </div>
+      </a>`;
+      })
+      .join("");
 
-  grid.querySelectorAll(".sc-done").forEach((b) =>
-    b.addEventListener("click", () => {
-      const arr = StashCore.loadItems();
-      const it = arr.find((x) => x.id === b.dataset.id);
-      if (it) { it.done = !it.done; StashCore.saveItems(arr); renderStash(); }
+  // open a folder
+  grid.querySelectorAll(".stash-card.folder").forEach((c) =>
+    c.addEventListener("click", (e) => {
+      if (e.target.closest(".sc-del")) return;
+      STASH.folder = c.dataset.folder;
+      STASH.q = ""; document.getElementById("stashSearch").value = "";
+      renderStash();
     })
   );
-  grid.querySelectorAll(".sc-del").forEach((b) =>
-    b.addEventListener("click", () => {
-      StashCore.saveItems(StashCore.loadItems().filter((x) => x.id !== b.dataset.id));
+
+  // delete a bookmark
+  grid.querySelectorAll("[data-del]").forEach((b) =>
+    b.addEventListener("click", async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      await BookmarksCore.remove(b.dataset.del);
+      toast("removed");
+      renderStash();
+    })
+  );
+
+  // delete a folder (and everything in it) — always confirm
+  grid.querySelectorAll("[data-deltree]").forEach((b) =>
+    b.addEventListener("click", async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const card = b.closest(".stash-card");
+      const name = card ? card.querySelector(".sc-name").textContent : "this folder";
+      if (!confirm(`Delete “${name}” and everything inside it?`)) return;
+      await BookmarksCore.removeTree(b.dataset.deltree);
+      toast("folder deleted");
       renderStash();
     })
   );
@@ -166,45 +187,23 @@ function setupStash() {
     document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") addStashItem(); })
   );
 
-  const dd = document.getElementById("stashCatSel");
-  const newCat = document.getElementById("stashNewCat");
-  dd.addEventListener("change", () => {
-    const v = dd.value;
-    if (v === "__new") {
-      newCat.style.display = "";
-      newCat.focus();
-    } else if (v) {
-      STASH.sel.add(v);
-      renderCatControls();
-    }
-    dd.value = "";
-  });
-  const commitNewCat = () => {
-    const t = StashCore.addTag(newCat.value);
-    if (t) STASH.sel.add(t);
-    newCat.value = ""; newCat.style.display = "none";
-    renderCatControls();
-  };
-  newCat.addEventListener("keydown", (e) => { if (e.key === "Enter") commitNewCat(); });
-  newCat.addEventListener("blur", () => { if (newCat.value.trim()) commitNewCat(); else newCat.style.display = "none"; });
-
-  document.getElementById("stashEditTags").addEventListener("click", () => {
-    STASH.manage = !STASH.manage;
-    document.getElementById("stashEditTags").classList.toggle("on", STASH.manage);
-    renderCatControls();
-  });
-
-  document.getElementById("stashFilter").addEventListener("change", (e) => {
-    STASH.filter = e.target.value;
+  document.getElementById("bmUp").addEventListener("click", async () => {
+    const n = await BookmarksCore.node(STASH.folder);
+    STASH.folder = (n && n.parentId) || BookmarksCore.ROOT;
     renderStash();
   });
 
   const q = document.getElementById("stashSearch");
-  q.addEventListener("input", () => { STASH.q = q.value.trim().toLowerCase(); renderStash(); });
+  let t = null;
+  q.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(() => { STASH.q = q.value.trim(); renderStash(); }, 120);
+  });
 
-  // shared store; re-render live whenever any surface changes it
-  StashCore.init(() => { if (!document.getElementById("stash").classList.contains("hidden")) renderStash(); });
-  StashCore.onChange(() => { if (!document.getElementById("stash").classList.contains("hidden")) renderStash(); });
+  // live re-render when bookmarks change anywhere (another tab, the bookmark bar…)
+  BookmarksCore.onChange(() => {
+    if (!document.getElementById("stash").classList.contains("hidden")) renderStash();
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.altKey && e.key.toLowerCase() === "s") { e.preventDefault(); openStash(); }

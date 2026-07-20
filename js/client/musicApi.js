@@ -39,8 +39,9 @@ class MusicApi {
   }
 
   /** Start a background download of an online track into the library. */
-  async remoteDownload(id) {
-    const res = await fetch(`${this.base}/api/remote/download/${encodeURIComponent(id)}`, {
+  async remoteDownload(id, title) {
+    const q = title ? `?title=${encodeURIComponent(title)}` : "";
+    const res = await fetch(`${this.base}/api/remote/download/${encodeURIComponent(id)}${q}`, {
       method: "POST",
     });
     return res.ok;
@@ -49,6 +50,17 @@ class MusicApi {
   /** Poll a download's status: { state: downloading|done|error|idle, percent }. */
   async remoteDownloadStatus(id) {
     return this.#json(`/api/remote/download/${encodeURIComponent(id)}/status`);
+  }
+
+  /** Every active + recent download: { jobs: [{id,title,state,percent,error}] }. */
+  async remoteDownloads() {
+    return this.#json("/api/remote/downloads");
+  }
+
+  /** Drop finished/failed jobs from the download list. */
+  async remoteDownloadsClear() {
+    const res = await fetch(`${this.base}/api/remote/downloads/clear`, { method: "POST" });
+    return res.ok;
   }
 
   // ---- online search (backend resolves via yt-dlp) ----

@@ -1,0 +1,12 @@
+{
+  "version": "1.4.0",
+  "notes": "Bookmarks browser, translation, history-aware search, and a vault security dashboard.",
+  "items": [
+    "Real bookmarks browser — folders and all, nothing wiped",
+    "Translate any selected text, plus a full translator (Alt+G)",
+    "Search bar now suggests from your history and bookmarks",
+    "Vault security dashboard — score, weak/reused breakdown, 2FA coverage",
+    "Display settings: size, weight, board width, open-in-new-tab"
+  ],
+  "url": "https://github.com/RDXFGXY1/nyx/releases"
+}

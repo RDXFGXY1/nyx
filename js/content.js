@@ -14,19 +14,29 @@
 
   const HOVER_MS = 500;
   const FONT = "-apple-system,'Segoe UI',Roboto,sans-serif";
-  const CARD_W = 260;
+  // the selection popup starts as a small pill; the caret opens a small menu
+  // (not a full card) so it stays compact (users found the card intrusive)
+  const PILL_W = 104, PILL_H = 30, MENU_W = 178, TR_W = 300;
   let ACCENT = "#ff4d55", ACCENT_INK = "#1a1a1c", ACCENT_SOFT = "rgba(255,77,85,0.16)";
+  let TRANSLATE_TO = "en";
+  const TARGETS = [
+    ["en", "English"], ["ar", "العربية"], ["fr", "Français"], ["es", "Español"],
+    ["de", "Deutsch"], ["it", "Italiano"], ["pt", "Português"], ["ru", "Русский"],
+    ["ja", "日本語"], ["zh-CN", "中文"], ["hi", "हिन्दी"], ["tr", "Türkçe"],
+  ];
   try {
-    chrome.storage?.local?.get(["accentColor", "accentInk", "accentSoftRgb"], (r) => {
+    chrome.storage?.local?.get(["accentColor", "accentInk", "accentSoftRgb", "translateTo"], (r) => {
       if (r.accentColor) ACCENT = r.accentColor;
       if (r.accentInk) ACCENT_INK = r.accentInk;
       if (r.accentSoftRgb) ACCENT_SOFT = "rgba(" + r.accentSoftRgb + ",0.16)";
+      if (r.translateTo) TRANSLATE_TO = r.translateTo;
     });
     chrome.storage?.onChanged?.addListener((ch, area) => {
       if (area !== "local") return;
       if (ch.accentColor) ACCENT = ch.accentColor.newValue || ACCENT;
       if (ch.accentInk) ACCENT_INK = ch.accentInk.newValue || ACCENT_INK;
       if (ch.accentSoftRgb) ACCENT_SOFT = "rgba(" + ch.accentSoftRgb.newValue + ",0.16)";
+      if (ch.translateTo) TRANSLATE_TO = ch.translateTo.newValue || TRANSLATE_TO;
     });
   } catch {}
 
@@ -107,157 +117,260 @@
     overBubble = false;
   }
 
+  // Position the bubble over/under the selection for a given size.
+  function place(w, h) {
+    const r = curRect;
+    const above = r.top > h + 24;
+    bubble.style.width = w + "px";
+    bubble.style.left =
+      Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+    bubble.style.top = (above ? r.top - h - 10 : r.bottom + 10) + "px";
+  }
+
+  // place using the bubble's own rendered height (for variable-height menus)
+  function placeMeasured(w) {
+    bubble.style.width = w + "px";
+    place(w, bubble.getBoundingClientRect().height || 110);
+  }
+
+  // place using the bubble's own rendered width AND height (auto-sized pill)
+  function placeAuto() {
+    bubble.style.width = "auto";
+    const rc = bubble.getBoundingClientRect();
+    place(Math.round(rc.width), Math.round(rc.height));
+  }
+
+  function saveItem(tags) {
+    try {
+      StashCore.addItem({
+        id: StashCore.newId(),
+        name: curText,
+        url: location.href,
+        tags,
+        done: false,
+        added: Date.now(),
+      });
+    } catch {}
+  }
+
+  /* Selecting text shows only this small pill — one click saves, the caret
+     expands the full card for categories. Keeps the page uncluttered. */
   function showBubble() {
     hoverTimer = null;
     if (bubble || !curText || !curRect) return;
-    const r = curRect;
-    const host = location.hostname.replace(/^www\./, "");
-    const title = curText.length > 70 ? curText.slice(0, 68) + "…" : curText;
-    const sel = new Set();
 
-    const above = r.top > 200;
     bubble = document.createElement("div");
     bubble.style.cssText =
-      "all:initial;position:fixed;z-index:2147483647;box-sizing:border-box;width:" + CARD_W + "px;" +
-      "left:" + Math.max(8, Math.min(window.innerWidth - CARD_W - 8, r.left + r.width / 2 - CARD_W / 2)) + "px;" +
-      "top:" + (above ? r.top - 168 : r.bottom + 12) + "px;font-family:" + FONT + ";";
-
-    const card = document.createElement("div");
-    card.style.cssText =
-      "box-sizing:border-box;background:rgba(18,18,24,0.98);border:1px solid rgba(255,255,255,0.14);" +
-      "border-radius:16px;padding:13px 14px;box-shadow:0 16px 44px rgba(0,0,0,0.5);";
-    card.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
-
-    // header: title + bookmark icon
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:flex-start;gap:10px;";
-    const titleEl = document.createElement("div");
-    titleEl.textContent = title;
-    titleEl.style.cssText =
-      "flex:1;min-width:0;font-size:14px;font-weight:700;line-height:1.3;color:#f4f4f6;" +
-      "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;";
-    const icon = document.createElement("div");
-    icon.innerHTML =
-      "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' " +
-      "stroke-linecap='round' stroke-linejoin='round'><path d='M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z'/></svg>";
-    icon.style.cssText =
-      "flex:none;width:30px;height:30px;border-radius:9px;background:" + ACCENT_SOFT + ";color:" + ACCENT + ";" +
-      "display:flex;align-items:center;justify-content:center;";
-    row.appendChild(titleEl); row.appendChild(icon);
-
-    // source
-    const sub = document.createElement("div");
-    sub.textContent = host;
-    sub.style.cssText = "margin-top:8px;font-size:11px;color:rgba(244,244,246,0.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-
-    // custom category dropdown (lives INSIDE the card so it stays open + styled)
-    const catWrap = document.createElement("div");
-    catWrap.style.cssText = "margin-top:11px;";
-
-    const trigger = document.createElement("div");
-    trigger.style.cssText =
-      "box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;" +
-      "font-family:" + FONT + ";font-size:12px;color:#f4f4f6;background:rgba(255,255,255,0.06);" +
-      "border:1px solid rgba(255,255,255,0.16);border-radius:10px;padding:9px 12px;cursor:pointer;user-select:none;";
-    trigger.innerHTML = "<span style='color:rgba(244,244,246,0.7)'>＋ add category</span><span style='opacity:0.5;font-size:10px' class='__chev'>▼</span>";
-
-    const list = document.createElement("div");
-    list.style.cssText =
-      "display:none;margin-top:6px;max-height:150px;overflow:auto;box-sizing:border-box;" +
-      "background:rgba(30,30,38,0.98);border:1px solid rgba(255,255,255,0.14);border-radius:10px;";
-
-    const selBox = document.createElement("div");
-    selBox.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;";
-
-    function buildList() {
-      const cats = (typeof StashCore !== "undefined" ? StashCore.loadTags() : []).filter((c) => !sel.has(c));
-      list.innerHTML = "";
-      if (!cats.length) {
-        const empty = document.createElement("div");
-        empty.textContent = "no more categories";
-        empty.style.cssText = "padding:9px 12px;font-size:12px;color:rgba(244,244,246,0.4);";
-        list.appendChild(empty);
-        return;
-      }
-      cats.forEach((c) => {
-        const opt = document.createElement("div");
-        opt.textContent = c;
-        opt.style.cssText = "padding:9px 12px;font-size:12px;color:#f4f4f6;cursor:pointer;";
-        opt.addEventListener("mouseenter", () => (opt.style.background = "rgba(255,255,255,0.07)"));
-        opt.addEventListener("mouseleave", () => (opt.style.background = "transparent"));
-        opt.addEventListener("mousedown", (e) => {
-          e.preventDefault(); e.stopPropagation();
-          sel.add(c); list.style.display = "none"; trigger.querySelector(".__chev").textContent = "▼";
-          refillSel();
-        });
-        list.appendChild(opt);
-      });
-    }
-
-    function refillSel() {
-      selBox.innerHTML = "";
-      [...sel].forEach((c) => {
-        const chip = document.createElement("span");
-        chip.textContent = c;
-        chip.style.cssText =
-          "display:inline-flex;align-items:center;gap:5px;font-size:11px;color:" + ACCENT_INK + ";background:" + ACCENT + ";" +
-          "border-radius:999px;padding:3px 5px 3px 10px;";
-        const x = document.createElement("span");
-        x.textContent = "✕";
-        x.style.cssText = "cursor:pointer;background:rgba(0,0,0,0.18);border-radius:50%;width:14px;height:14px;display:inline-grid;place-items:center;font-size:8px;";
-        x.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); sel.delete(c); refillSel(); });
-        chip.appendChild(x);
-        selBox.appendChild(chip);
-      });
-      buildList();
-    }
-
-    trigger.addEventListener("mousedown", (e) => {
-      e.preventDefault(); e.stopPropagation();
-      const open = list.style.display === "none";
-      list.style.display = open ? "block" : "none";
-      trigger.querySelector(".__chev").textContent = open ? "▲" : "▼";
-    });
-
-    refillSel();
-    catWrap.appendChild(trigger);
-    catWrap.appendChild(list);
-    catWrap.appendChild(selBox);
-
-    // save button
-    const save = document.createElement("button");
-    save.textContent = "Save to Stash";
-    save.style.cssText =
-      "all:unset;box-sizing:border-box;display:block;width:100%;text-align:center;margin-top:12px;" +
-      "font-family:" + FONT + ";font-size:13px;font-weight:700;color:" + ACCENT_INK + ";background:" + ACCENT + ";" +
-      "border-radius:11px;padding:9px 0;cursor:pointer;";
-    save.addEventListener("click", (e) => {
-      e.preventDefault(); e.stopPropagation();
-      try {
-        StashCore.addItem({
-          id: StashCore.newId(),
-          name: curText,
-          url: location.href,
-          tags: [...sel],
-          done: false,
-          added: Date.now(),
-        });
-      } catch {}
-      save.textContent = "✓ Saved";
-      save.style.background = "#4ade80";
-      icon.style.background = "rgba(74,222,128,0.16)";
-      icon.style.color = "#4ade80";
-      setTimeout(hideBubble, 700);
-    });
-
-    card.appendChild(row);
-    card.appendChild(sub);
-    card.appendChild(catWrap);
-    card.appendChild(save);
-
-    bubble.appendChild(card);
+      "all:initial;position:fixed;z-index:2147483647;box-sizing:border-box;font-family:" + FONT + ";";
+    bubble.appendChild(buildPill());
+    document.body.appendChild(bubble);
+    placeAuto();
     bubble.addEventListener("mouseenter", () => { overBubble = true; });
     bubble.addEventListener("mouseleave", () => { overBubble = false; hideBubble(); });
-    document.body.appendChild(bubble);
   }
+
+  function buildPill() {
+    const pill = document.createElement("div");
+    pill.style.cssText =
+      "box-sizing:border-box;display:flex;align-items:center;height:" + PILL_H + "px;" +
+      "background:rgba(18,18,24,0.96);border:1px solid rgba(255,255,255,0.12);" +
+      "border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,0.35);overflow:hidden;";
+    pill.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+
+    const main = document.createElement("div");
+    main.style.cssText =
+      "display:flex;align-items:center;gap:6px;padding:0 11px;height:100%;cursor:pointer;" +
+      "color:#f4f4f6;font-size:12px;font-weight:600;";
+    main.innerHTML =
+      "<svg viewBox='0 0 24 24' width='13' height='13' fill='none' stroke='" + ACCENT + "' stroke-width='2' " +
+      "stroke-linecap='round' stroke-linejoin='round'><path d='M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z'/></svg>" +
+      "<span>Save</span>";
+    main.addEventListener("mouseenter", () => (main.style.background = "rgba(255,255,255,0.07)"));
+    main.addEventListener("mouseleave", () => (main.style.background = "transparent"));
+    main.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      saveItem([]);
+      main.querySelector("span").textContent = "Saved";
+      main.style.color = "#4ade80";
+      setTimeout(hideBubble, 600);
+    });
+
+    // translate segment
+    const tr = document.createElement("div");
+    tr.title = "translate selection";
+    tr.style.cssText =
+      "display:flex;align-items:center;gap:5px;padding:0 11px;height:100%;cursor:pointer;" +
+      "color:#f4f4f6;font-size:12px;font-weight:600;border-left:1px solid rgba(255,255,255,0.12);";
+    tr.innerHTML =
+      "<svg viewBox='0 0 24 24' width='13' height='13' fill='none' stroke='" + ACCENT + "' stroke-width='2' " +
+      "stroke-linecap='round' stroke-linejoin='round'><path d='M4 5h7M9 3v2c0 4-2 7-5 8'/><path d='M5 9c0 3 3 5 6 6'/>" +
+      "<path d='M13 19l4-9 4 9M14.5 16h5'/></svg><span>Translate</span>";
+    tr.addEventListener("mouseenter", () => (tr.style.background = "rgba(255,255,255,0.07)"));
+    tr.addEventListener("mouseleave", () => (tr.style.background = "transparent"));
+    tr.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!bubble) return;
+      bubble.innerHTML = "";
+      bubble.appendChild(buildTranslation());
+      placeMeasured(TR_W);
+    });
+
+    const more = document.createElement("div");
+    more.title = "choose a category";
+    more.textContent = "▾";
+    more.style.cssText =
+      "display:flex;align-items:center;padding:0 9px;height:100%;cursor:pointer;font-size:9px;" +
+      "color:rgba(244,244,246,0.55);border-left:1px solid rgba(255,255,255,0.12);";
+    more.addEventListener("mouseenter", () => (more.style.background = "rgba(255,255,255,0.07)"));
+    more.addEventListener("mouseleave", () => (more.style.background = "transparent"));
+    more.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!bubble) return;
+      bubble.innerHTML = "";
+      bubble.appendChild(buildMenu());
+      placeMeasured(MENU_W);
+    });
+
+    pill.appendChild(main);
+    pill.appendChild(tr);
+    pill.appendChild(more);
+    return pill;
+  }
+
+  /* Translation panel: shows the translated text, the detected source language,
+     and a target-language picker (remembered for next time). */
+  function buildTranslation() {
+    const wrap = document.createElement("div");
+    wrap.style.cssText =
+      "box-sizing:border-box;background:rgba(18,18,24,0.98);border:1px solid rgba(255,255,255,0.12);" +
+      "border-radius:14px;padding:12px 13px;box-shadow:0 12px 30px rgba(0,0,0,0.5);";
+    wrap.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+
+    // header: label + target language selector
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;";
+    const srcLbl = document.createElement("div");
+    srcLbl.textContent = "translating…";
+    srcLbl.style.cssText = "font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:rgba(244,244,246,0.5);";
+
+    const langSel = document.createElement("select");
+    langSel.style.cssText =
+      "all:unset;box-sizing:border-box;cursor:pointer;font-family:" + FONT + ";font-size:11px;color:#f4f4f6;" +
+      "background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.16);border-radius:8px;padding:3px 7px;";
+    langSel.innerHTML = TARGETS
+      .map(([c, n]) => "<option value='" + c + "'" + (c === TRANSLATE_TO ? " selected" : "") + ">" + n + "</option>")
+      .join("");
+    langSel.addEventListener("mousedown", (e) => e.stopPropagation());
+    langSel.addEventListener("change", () => {
+      TRANSLATE_TO = langSel.value;
+      try { chrome.storage?.local?.set({ translateTo: TRANSLATE_TO }); } catch {}
+      run();
+    });
+    head.appendChild(srcLbl); head.appendChild(langSel);
+
+    const body = document.createElement("div");
+    body.style.cssText =
+      "font-size:13px;line-height:1.45;color:#f4f4f6;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word;";
+    body.textContent = "…";
+
+    const foot = document.createElement("div");
+    foot.style.cssText = "display:flex;justify-content:flex-end;margin-top:9px;";
+    const copy = document.createElement("button");
+    copy.textContent = "copy";
+    copy.style.cssText =
+      "all:unset;cursor:pointer;font-family:" + FONT + ";font-size:11px;font-weight:600;color:rgba(244,244,246,0.7);" +
+      "background:rgba(255,255,255,0.06);border-radius:8px;padding:4px 10px;";
+    copy.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      try { navigator.clipboard.writeText(body.textContent); copy.textContent = "copied"; } catch {}
+    });
+    foot.appendChild(copy);
+
+    function run() {
+      srcLbl.textContent = "translating…";
+      body.textContent = "…";
+      const wanted = curText;
+      try {
+        chrome.runtime.sendMessage({ type: "translate", text: wanted, to: TRANSLATE_TO }, (resp) => {
+          if (!bubble || curText !== wanted) return; // selection changed / closed
+          if (chrome.runtime.lastError || !resp) { srcLbl.textContent = "translate"; body.textContent = "couldn't translate right now."; return; }
+          if (!resp.ok) { srcLbl.textContent = "translate"; body.textContent = resp.error || "couldn't translate."; return; }
+          const name = (TARGETS.find(([c]) => c === TRANSLATE_TO) || [, TRANSLATE_TO])[1];
+          srcLbl.textContent = (resp.src || "auto") + " → " + name;
+          body.textContent = resp.text || "(no translation)";
+          placeMeasured(TR_W);
+        });
+      } catch { srcLbl.textContent = "translate"; body.textContent = "couldn't translate here."; }
+    }
+
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    wrap.appendChild(foot);
+    run();
+    return wrap;
+  }
+
+  /* Small category menu shown from the caret — a compact chip picker + Save,
+     not the old full-width card. */
+  function buildMenu() {
+    const sel = new Set();
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText =
+      "box-sizing:border-box;background:rgba(18,18,24,0.98);border:1px solid rgba(255,255,255,0.12);" +
+      "border-radius:12px;padding:10px 11px;box-shadow:0 10px 28px rgba(0,0,0,0.45);";
+    wrap.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+
+    const label = document.createElement("div");
+    label.textContent = "save to";
+    label.style.cssText =
+      "font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;" +
+      "color:rgba(244,244,246,0.5);margin-bottom:8px;";
+
+    const chips = document.createElement("div");
+    chips.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;";
+    const off = "font-size:11px;border-radius:999px;padding:3px 9px;cursor:pointer;user-select:none;" +
+      "border:1px solid rgba(255,255,255,0.16);color:#f4f4f6;background:rgba(255,255,255,0.05);";
+    const on = "font-size:11px;border-radius:999px;padding:3px 9px;cursor:pointer;user-select:none;" +
+      "border:1px solid transparent;color:" + ACCENT_INK + ";background:" + ACCENT + ";";
+
+    const cats = (typeof StashCore !== "undefined" ? StashCore.loadTags() : []);
+    if (!cats.length) {
+      const none = document.createElement("div");
+      none.textContent = "no categories yet";
+      none.style.cssText = "font-size:11px;color:rgba(244,244,246,0.4);";
+      chips.appendChild(none);
+    }
+    cats.forEach((c) => {
+      const chip = document.createElement("div");
+      chip.textContent = c;
+      chip.style.cssText = off;
+      chip.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (sel.has(c)) { sel.delete(c); chip.style.cssText = off; }
+        else { sel.add(c); chip.style.cssText = on; }
+      });
+      chips.appendChild(chip);
+    });
+
+    const save = document.createElement("button");
+    save.textContent = "Save";
+    save.style.cssText =
+      "all:unset;box-sizing:border-box;display:block;width:100%;text-align:center;margin-top:10px;" +
+      "font-family:" + FONT + ";font-size:12px;font-weight:700;color:" + ACCENT_INK + ";background:" + ACCENT + ";" +
+      "border-radius:9px;padding:7px 0;cursor:pointer;";
+    save.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      saveItem([...sel]);
+      save.textContent = "✓ Saved";
+      save.style.background = "#4ade80";
+      setTimeout(hideBubble, 600);
+    });
+
+    wrap.appendChild(label);
+    wrap.appendChild(chips);
+    wrap.appendChild(save);
+    return wrap;
+  }
+
 })();

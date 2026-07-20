@@ -5,6 +5,151 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.4.0] — 2026-07-20
+
+### Added
+- **"What's new" popup** — after an update, the first new tab shows a one-time
+  glass card with the version's highlights, dismissed with "Got it" (stored per
+  version so it never nags). Also introduced `version/` — a folder of per-release
+  notes — and reconciled `manifest.json` to 1.4.0 (`js/whatsnew.js`,
+  `css/style.css`).
+- **Update notifier (no backend)** — installed copies poll a static root
+  `version.json` on GitHub (raw URL, every ~6h) and, if it's newer than the
+  installed version, show an "update available" banner with a link to the
+  release. Closing the banner **minimizes it to a small persistent corner pill**
+  (with a gently pulsing dot) rather than dismissing forever — it stays on every
+  new tab until the user actually updates. Clicking the pill opens a **"What's
+  new" popup** listing the update's changes (a bulleted `items` array in
+  `version.json`, falling back to `notes`) with **Get it** / **Later**. Adds the
+  `https://raw.githubusercontent.com/*` host permission (`js/updatecheck.js`,
+  `version.json`, `css/style.css`).
+
+### Changed
+- **Vault → security dashboard** — the vault passwords view is now a two-column
+  dashboard (widened 620px → 1080px) that fills the empty space with a right-hand
+  insight sidebar: a big **security-score ring**, a **breakdown** (all / strong /
+  weak / reused / old) where each row **filters the list**, a **2FA coverage**
+  bar, **recently used**, and **recently saved**. Added a **search** box for the
+  list. "Recently used" is powered by a new per-entry **last-used** timestamp
+  recorded on reveal and stored inside the encrypted vault
+  (`VaultService.LastUsed`, set in `Reveal`). Backend: `VaultService.cs`; UI:
+  `js/vault.js`, `css/style.css`.
+- **Vault redesign** — the vault now *looks* like a secure vault: a **security
+  score meter** (green/amber/red strength bar + a glowing % score) replaces the
+  plain "N weak · N reused" text; each login shows a **site favicon** and a
+  colored **left status strip** (red = weak, amber = reused) for at-a-glance
+  risk scanning; crisp SVG show/delete icons; an accent-glow key, glowing active
+  tabs with count pills, and deeper glass rows with lift-on-hover. Verified in a
+  browser (`css/style.css`, `js/vault.js`).
+
+### Added
+- **Settings → Display section** — new controls in the settings panel: **Size**
+  (S / M / L, scales the link boards), **Weight** (Normal / Bold link text),
+  **Board width** slider (column width), and **Open links in a new tab**. All
+  persist and apply on load (`index.html`, `css/style.css`, `js/extras.js`,
+  `js/app.js`).
+- **Search bar now suggests from your history** — typing in the new-tab search
+  bar surfaces matches from your **browsing history** and **bookmarks** alongside
+  your saved links, like the real address bar. Ranked links → bookmarks → history
+  (history by visit count), deduped by URL, with favicons and a source tag
+  (`saved` / `history`). Adds the `history` permission (`js/extras.js`,
+  `css/style.css`).
+- **Translation** — select text on any page → the selection pill's new
+  **Translate** button shows the translation right there, with the detected
+  source language and a target-language picker (remembered for next time). Also a
+  **`>translate` / `>tr`** command in the new-tab palette (result copied to the
+  clipboard). Uses Google's free endpoint via the background worker (no API key,
+  no CORS issues); auto-detects the source. Adds the
+  `https://translate.googleapis.com/*` host permission
+  (`js/background.js`, `js/content.js`, `js/commands.js`).
+- **Translate panel (new tab)** — a full translator overlay (Alt+G, or
+  `>translate`): type/paste on the left, live translation on the right, with
+  source (auto-detect) + target language pickers and a **swap** button that
+  moves the translation back into the input. Target language is remembered
+  (`js/translate.js`, `index.html`, `css/style.css`).
+- **Player SETTINGS tab + full-screen mode** — a ⚙ tab in the HUD (next to
+  PLAYLIST · SEARCH · QUEUE) with live, persisted toggles for the album-art glow,
+  synced lyrics, waveform bar, visualizer ring, and always-on-top. Includes a
+  **Full-screen "Now Playing"** switch that opens an immersive fullscreen view
+  (big art, title, live lyrics, progress, transport) bound to the same playback
+  (`FullPlayerWindow`). Toggles are shared with the Control Panel's HUD page.
+- **Floating Vinyl HUD — new touches**:
+  - **Album-art ambient glow** — a blurred radial glow behind the vinyl, tinted
+    from the current track's album art and pulsing on the bass (via the existing
+    FFT). `Services/ArtColors.cs`.
+  - **Synced lyrics** — karaoke line under the transport, fetched from LRCLIB and
+    highlighted line-by-line. `Services/LyricsService.cs`.
+  - **Waveform seek bar** — a stylized bar waveform that fills with playback
+    progress, replacing the plain progress line (seek still works).
+
+### Changed
+- **Saved tab is now a real bookmarks browser** — it reads your actual browser
+  bookmarks (`chrome.bookmarks`, new `bookmarks` permission) instead of a private
+  store that could be wiped, so nothing is ever lost. Shows **folders** (with a
+  recursive bookmark count) and links together, click a folder to go in, with a
+  clickable **breadcrumb** + ↑ to come back, and search across every bookmark at
+  once. Adding a link bookmarks it into the current folder; leaving the link empty
+  creates a folder. Restyled to match the board; categories/tags are gone (folders
+  replace them). New `js/bookmarksCore.js`; `js/stash.js` rewritten.
+- **Text-selection popup is now a small pill** (user feedback: the card was
+  intrusive). Selecting text shows a 104×30 "🔖 Save ▾" pill instead of the full
+  260×189 card: clicking **Save** stashes it in one click; the **▾** expands into
+  the original card when you want categories (`js/content.js`).
+- **HUD volume now controls the player only**, not the Windows master volume, and
+  is persisted (`HudSettings.Volume`). The system-audio service is now used purely
+  for the spectrum visualizer.
+
+### Added (control panel)
+- **Control panel — four new pages**:
+  - **Library & paths** — choose the music library folder (validates + rescans),
+    the wallpaper folder, and the yt-dlp executable, with Browse pickers. Backed
+    by `GET/POST /api/settings/paths|library|ytdlp` and runtime path overrides
+    (`RuntimePaths.cs`) that win over `appsettings.json`.
+  - **HUD** — show/hide the Vinyl HUD, always-on-top, visualizer on/off (all
+    persisted via `HudSettings.cs`), and the Alt+D summon hotkey shown.
+  - **Diagnostics** — today's free-plan usage, yt-dlp/ffmpeg presence + versions,
+    library path + track count, app version, and Open-data-folder. Backed by
+    `GET /api/diag`.
+  - **About & updates** — version, and a "Check for updates" that queries the
+    optional `UpdateUrl` from `nyx.config.json`.
+- **Configurable activation server** — the desktop app reads `ActivationServer`
+  (and `UpdateUrl`) from `nyx.config.json` (`AppConfig.cs`), so a shipped build
+  can point at your production license server without recompiling. Deploy runbook
+  in `desktop/NullTab.LicenseServer/DEPLOY.md`.
+- **Free-plan usage cap (desktop app)** — an unlicensed install may run the
+  bundled backend for **2 hours per calendar day**; a valid license lifts the
+  cap entirely (unlimited). Usage is persisted and resets at local midnight.
+  When the daily budget is spent, the backend stops and refuses to restart until
+  the next day, a tray notification appears, and the activation window opens.
+  Remaining time is shown in the control panel and license window
+  (`Services/UsageLimiter.cs`, `Services/BackendHost.cs`, `TrayManager.cs`,
+  `App.xaml.cs`, `ControlWindow.xaml.cs`, `LicenseWindow.xaml.cs`).
+- **License server**: per-product filter (`GumroadProductPermalink`) so the
+  account-wide Gumroad Ping only mints keys for the Nyx product; token now also
+  accepted as a URL path segment; seller-id logging. `README.md` with full
+  run/Gumroad/SMTP setup (`desktop/NullTab.LicenseServer/`).
+
+---
+
+## [1.3.0] — 2026-07-11
+
+### Added
+- **Lyrics on the wallpaper** — synced lyrics from LRCLIB drawn on the wallpaper
+  behind the cards, following the browser player line-by-line. Settings: on/off,
+  text size, animation (fade/slide/glow/blur), position, color (white or a
+  softened accent), custom **font upload** (`.ttf/.otf/.woff`), and a **sync
+  offset** slider for sped-up/remixed tracks (`js/lyrics.js`).
+- **Crossfade** — smooth blend between songs via an A/B audio pair; slider in
+  settings → playback (0–12s); works on next/prev, queue, and auto-advance
+  (`js/dashboard.js`).
+- **Download queue** — a panel (media → online) listing every active/recent
+  download with live progress bars, done/failed states, and "clear done".
+  Server tracks titles + exposes `GET /api/remote/downloads` and
+  `POST /api/remote/downloads/clear` (`RemoteController.cs`).
+- **Smart playlists** — auto-grouped chips from your library's genres
+  (plus "shuffle all") in the library view; one click shuffles that group into
+  the player (`renderSmartLists` / `playSmart`). Library now carries `genre`.
+
 ## [1.2.0] — 2026-07-10
 
 ### Added

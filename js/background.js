@@ -12,6 +12,28 @@ const RPC_ENDPOINTS = [
 ];
 let rpcTimer = null;
 
+/* ---- translation (Google's free gtx endpoint, no API key) ----
+   Returns { ok, text, src } where src is the detected source language. */
+async function translateText(text, to, from) {
+  text = (text || "").trim();
+  if (!text) return { ok: false, error: "nothing to translate" };
+  if (text.length > 5000) text = text.slice(0, 5000);
+
+  const url =
+    "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" +
+    encodeURIComponent(from || "auto") + "&tl=" +
+    encodeURIComponent(to) + "&dt=t&q=" + encodeURIComponent(text);
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("translate failed (" + res.status + ")");
+  const data = await res.json();
+
+  // data[0] = array of [translatedChunk, originalChunk, ...]; data[2] = detected src
+  const out = (data[0] || []).map((seg) => seg[0]).join("");
+  const src = data[2] || "auto";
+  return { ok: true, text: out, src };
+}
+
 function buildMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
@@ -286,6 +308,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "stash-save") {
     openSavePopup(msg.name, msg.url);
     return;
+  }
+
+  // Translate via Google's free endpoint. Done here (not in the content
+  // script) so host_permissions apply and CORS never blocks it.
+  if (msg && msg.type === "translate") {
+    translateText(msg.text, msg.to || "en", msg.from || "auto")
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e && e.message || e) }));
+    return true; // async
   }
 
   if (msg && msg.type === "rpc-page") {

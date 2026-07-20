@@ -199,24 +199,94 @@ function flatLinks() {
   return out;
 }
 
-function renderLauncher(q) {
+// strip protocol/www/trailing-slash so the same page from different sources dedupes
+function normUrl(u) {
+  try {
+    const x = new URL(u);
+    return (x.hostname.replace(/^www\./, "") + x.pathname + x.search).replace(/\/$/, "");
+  } catch { return (u || "").replace(/\/$/, ""); }
+}
+
+function queryHistory(q, max) {
+  return new Promise((resolve) => {
+    if (!(typeof chrome !== "undefined" && chrome.history && chrome.history.search)) return resolve([]);
+    try {
+      chrome.history.search({ text: q, maxResults: max, startTime: 0 }, (items) => {
+        resolve((items || [])
+          .filter((h) => h.url)
+          .map((h) => ({ type: "history", name: h.title || h.url, url: h.url, visits: h.visitCount || 0 })));
+      });
+    } catch { resolve([]); }
+  });
+}
+
+function queryBookmarkLinks(q, max) {
+  return new Promise((resolve) => {
+    if (!(typeof chrome !== "undefined" && chrome.bookmarks && chrome.bookmarks.search)) return resolve([]);
+    try {
+      chrome.bookmarks.search(q, (nodes) => {
+        resolve((nodes || [])
+          .filter((n) => n.url)
+          .slice(0, max)
+          .map((n) => ({ type: "bookmark", name: n.title || n.url, url: n.url })));
+      });
+    } catch { resolve([]); }
+  });
+}
+
+async function renderLauncher(raw) {
   const el = document.getElementById("palette");
-  q = q.trim().toLowerCase();
-  if (q.length < 2) { LAUNCH.open = false; closePalette(); return; }
-  const items = flatLinks().filter((l) => l.name.toLowerCase().includes(q)).slice(0, 6);
+  const q = raw.trim();
+  const ql = q.toLowerCase();
+  if (ql.length < 2) { LAUNCH.open = false; closePalette(); return; }
+
+  LAUNCH._q = ql; // guard against out-of-order async results
+
+  // your curated links first
+  const links = flatLinks()
+    .filter((l) => l.name.toLowerCase().includes(ql) || (l.url || "").toLowerCase().includes(ql))
+    .slice(0, 4)
+    .map((l) => ({ type: "link", name: l.name, url: l.url }));
+
+  const [hist, marks] = await Promise.all([queryHistory(q, 8), queryBookmarkLinks(q, 4)]);
+  if (LAUNCH._q !== ql) return; // a newer keystroke already ran
+
+  // history ranked by how often you visit it
+  hist.sort((a, b) => b.visits - a.visits);
+
+  // merge links → bookmarks → history, deduping by normalized URL
+  const seen = new Set();
+  const items = [];
+  for (const it of [...links, ...marks, ...hist]) {
+    const key = normUrl(it.url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(it);
+    if (items.length >= 7) break;
+  }
+
   LAUNCH.items = items;
   if (!items.length) { LAUNCH.open = false; closePalette(); return; }
   LAUNCH.sel = Math.min(LAUNCH.sel, items.length - 1);
   LAUNCH.open = true;
+
+  const tagFor = { history: "history", bookmark: "saved", link: "" };
   el.innerHTML = items
-    .map((l, i) => `
+    .map((l, i) => {
+      const fav = favicon(l.url);
+      const ico = fav
+        ? `<img src="${escHtml(fav)}" alt="" loading="lazy">`
+        : escHtml(iconLetter(l.name));
+      const tag = tagFor[l.type] ? `<span class="palette-tag">${tagFor[l.type]}</span>` : "";
+      return `
       <div class="palette-item ${i === LAUNCH.sel ? "sel" : ""}" data-i="${i}">
-        <span class="palette-ico">${escHtml(iconLetter(l.name))}</span>
+        <span class="palette-ico">${ico}</span>
         <span class="palette-txt">
-          <span class="palette-cmd">${escHtml(l.name)}</span>
+          <span class="palette-cmd">${escHtml(l.name)}${tag}</span>
           <span class="palette-hint">${escHtml(l.url)}</span>
         </span>
-      </div>`)
+      </div>`;
+    })
     .join("");
   el.classList.add("open");
   el.querySelectorAll(".palette-item").forEach((it) =>
@@ -723,6 +793,21 @@ function setupPhone() {
 }
 
 /* ---------- settings panel (the gear) ---------- */
+/* apply display prefs (size / weight / board width) to the board */
+function applyDisplay() {
+  const root = document.documentElement;
+  root.dataset.size = localStorage.getItem("uiSize") || "m";
+  root.dataset.weight = localStorage.getItem("uiWeight") || "normal";
+  const cw = localStorage.getItem("colW");
+  if (cw) root.style.setProperty("--col-w", cw + "px");
+  else root.style.removeProperty("--col-w");
+}
+
+/* highlight the active button in a segmented control */
+function setSegOn(id, v) {
+  document.querySelectorAll("#" + id + " button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+}
+
 function openSettings(force) {
   const el = document.getElementById("settings");
   const show = force !== undefined ? force : el.classList.contains("hidden");
@@ -732,6 +817,11 @@ function openSettings(force) {
 
 function syncSettings() {
   const g = (id) => document.getElementById(id);
+  setSegOn("setSize", localStorage.getItem("uiSize") || "m");
+  setSegOn("setWeight", localStorage.getItem("uiWeight") || "normal");
+  const cw = parseInt(localStorage.getItem("colW") || 240);
+  g("setColW").value = cw; g("colwVal").textContent = cw + "px";
+  g("setNewTab").checked = localStorage.getItem("openNewTab") === "1";
   g("setDim").value = localStorage.getItem("dim") ?? 1;
   g("setBlur").value = parseInt(localStorage.getItem("blur") ?? 18);
   const acc = localStorage.getItem("accent") || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
@@ -758,6 +848,13 @@ function syncSettings() {
   g("lyricsFontHint").textContent = localStorage.getItem("lyricsFont")
     ? "font: " + localStorage.getItem("lyricsFont")
     : "upload a .ttf / .otf / .woff to style the lyrics";
+  const off = parseFloat(localStorage.getItem("lyricsOffset") || 0);
+  g("setLyricsOffset").value = off;
+  g("lyricsOffsetVal").textContent = (off > 0 ? "+" : "") + off.toFixed(2) + "s";
+
+  const cf = parseInt(localStorage.getItem("crossfade") || 0);
+  g("setCrossfade").value = cf;
+  g("crossfadeVal").textContent = cf ? cf + "s" : "off";
 }
 
 /* status line for the random-wallpaper folder — local picked folder or server path */
@@ -843,6 +940,27 @@ function applyVideoVolume() {
 function setupSettings() {
   const g = (id) => document.getElementById(id);
   applyVideoVolume();
+  applyDisplay();
+
+  // display: size / weight / board width / open-in-new-tab
+  g("setSize").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    localStorage.setItem("uiSize", b.dataset.v); applyDisplay(); setSegOn("setSize", b.dataset.v);
+  });
+  g("setWeight").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    localStorage.setItem("uiWeight", b.dataset.v); applyDisplay(); setSegOn("setWeight", b.dataset.v);
+  });
+  g("setColW").addEventListener("input", (e) => {
+    localStorage.setItem("colW", e.target.value);
+    document.documentElement.style.setProperty("--col-w", e.target.value + "px");
+    g("colwVal").textContent = e.target.value + "px";
+  });
+  g("setNewTab").addEventListener("change", (e) => {
+    if (e.target.checked) localStorage.setItem("openNewTab", "1");
+    else localStorage.removeItem("openNewTab");
+  });
+
   g("settingsBtn").addEventListener("click", () => openSettings());
   g("setClose").addEventListener("click", () => openSettings(false));
   g("settings").addEventListener("click", (e) => { if (e.target.id === "settings") openSettings(false); });
@@ -927,6 +1045,15 @@ function setupSettings() {
   });
   g("setLyricsColor").addEventListener("change", (e) => {
     localStorage.setItem("lyricsColor", e.target.value); LYRICS.applyStyle();
+  });
+  g("setLyricsOffset").addEventListener("input", (e) => {
+    localStorage.setItem("lyricsOffset", e.target.value);
+    const v = parseFloat(e.target.value);
+    g("lyricsOffsetVal").textContent = (v > 0 ? "+" : "") + v.toFixed(2) + "s";
+  });
+  g("setCrossfade").addEventListener("input", (e) => {
+    localStorage.setItem("crossfade", e.target.value);
+    g("crossfadeVal").textContent = +e.target.value ? e.target.value + "s" : "off";
   });
   g("setLyricsFont").addEventListener("click", () => {
     const inp = document.createElement("input");

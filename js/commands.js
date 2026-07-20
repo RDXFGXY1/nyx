@@ -11,7 +11,7 @@ const CMD_ICONS = {
   ">help": "?", ">dim": "◐", ">blur": "≋", ">avatar": "◉",
   ">play": "▶", ">stop": "◼", ">edit": "✎", ">links reset": "↺",
   ">note": "✎", ">todo": "☑", ">pet": "ᨐ", ">pulse": "◉", ">queue": "≣",
-  ">stash": "▤", ">save": "✚", ">vault": "🔑", ">autodj": "♫", ">mode": "◈", ">phone": "▢",
+  ">stash": "▤", ">save": "✚", ">translate": "文", ">tr": "文", ">vault": "🔑", ">autodj": "♫", ">mode": "◈", ">phone": "▢",
   ">lock": "▢", ">sleep": "☾", ">shutdown": "⏻", ">abort": "✕", ">mute": "♪",
 };
 
@@ -65,6 +65,10 @@ const COMMANDS = [
   { cmd: ">vault",       hint: "password vault (Alt+P)",          run: () => openVault(true) },
   { cmd: ">save",        hint: ">save Dune 2 — quick-save to stash", arg: true,
     run: (a) => quickSaveStash(a) },
+  { cmd: ">translate",   hint: "open the translator (Alt+G)", arg: true,
+    run: (a) => openTranslate(true, a) },
+  { cmd: ">tr",          hint: ">tr guten tag — quick translate (result copied)", arg: true,
+    run: (a) => runTranslate(a) },
   { cmd: ">pulse",       hint: "wallpaper pulses with the music",  run: () => togglePulse() },
   { cmd: ">autodj",      hint: "music follows what you do (code=play, video=pause)", run: () => toggleAutoDj() },
   { cmd: ">mode",        hint: ">mode work · save work · del work — life-modes", arg: true, run: (a) => runModeCommand(a) },
@@ -82,6 +86,22 @@ const COMMANDS = [
 ];
 
 // ---------- pc control: talk to the backend ----------
+function runTranslate(text) {
+  text = (text || "").trim();
+  if (!text) return toast("translate what?");
+  chrome.storage?.local?.get(["translateTo"], (r) => {
+    const to = (r && r.translateTo) || "en";
+    try {
+      chrome.runtime.sendMessage({ type: "translate", text, to }, (resp) => {
+        if (chrome.runtime.lastError || !resp || !resp.ok) return toast("translation failed");
+        try { navigator.clipboard.writeText(resp.text); } catch {}
+        const t = resp.text.length > 140 ? resp.text.slice(0, 137) + "…" : resp.text;
+        toast(t + "  · copied");
+      });
+    } catch { toast("translation unavailable"); }
+  });
+}
+
 function pcCmd(action, params, okMsg) {
   if (typeof MusicSource === "undefined" || !MusicSource.api || !MusicSource.online)
     return toast("music server offline — start backend/run.bat");

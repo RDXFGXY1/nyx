@@ -192,35 +192,42 @@ async function startTotp(ids) {
   VTOTP.timer = setInterval(tick, 1000);
 }
 
-/* ---- password health ---- */
-async function loadHealth() {
+
+const VAULT = { section: "passwords", entries: [], addOpen: false, addOtpOpen: false, addIdOpen: false, addCardOpen: false, q: "", filter: "all", health: null };
+
+/* fetch + cache password health once per entries-refresh */
+async function ensureHealth() {
+  if (VAULT.health) return VAULT.health;
   try {
     const r = await vaultReq("/health");
-    if (!r.ok) return;
-    const h = await r.json();
-    (h.items || []).forEach((it) => {
-      const b = document.getElementById("bdg-" + it.id);
-      if (b) b.innerHTML = it.issues.map((x) => `<span class="vbadge ${x}">${x}</span>`).join("");
-    });
-    const el = document.getElementById("vHealth");
-    if (el) {
-      const parts = [];
-      if (h.weak) parts.push(h.weak + " weak");
-      if (h.reused) parts.push(h.reused + " reused");
-      if (h.old) parts.push(h.old + " old");
-      el.textContent = parts.length ? "⚠ " + parts.join(" · ") : "✓ all healthy";
-      el.classList.toggle("ok", !parts.length);
+    if (r.ok) {
+      const h = await r.json();
+      const byId = {};
+      (h.items || []).forEach((it) => (byId[it.id] = it.issues || []));
+      VAULT.health = { weak: h.weak || 0, reused: h.reused || 0, old: h.old || 0, byId };
     }
   } catch {}
+  return VAULT.health;
 }
 
-const VAULT = { section: "passwords", entries: [], addOpen: false, addOtpOpen: false, addIdOpen: false, addCardOpen: false };
+/* "3h ago" / "2d ago" / "just now" */
+function relTime(ms) {
+  if (!ms) return "";
+  const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60); if (m < 60) return m + "m ago";
+  const h = Math.floor(m / 60); if (h < 24) return h + "h ago";
+  const d = Math.floor(h / 24); if (d < 30) return d + "d ago";
+  const mo = Math.floor(d / 30); if (mo < 12) return mo + "mo ago";
+  return Math.floor(mo / 12) + "y ago";
+}
 
 async function renderList() {
   try {
     const r = await vaultReq("/entries");
     if (r.status === 423) return renderUnlock();
     VAULT.entries = (await r.json()).entries || [];
+    VAULT.health = null; // recompute health against the fresh entries
   } catch { document.getElementById("vaultBody").innerHTML = `<div class="vault-msg">server offline</div>`; return; }
   renderSection();
 }
@@ -353,41 +360,68 @@ async function revealCard(id) {
   } catch {}
 }
 
+function vaultIcon(site) {
+  const dom = (site || "").includes(".") ? site.replace(/^https?:\/\//, "").split("/")[0] : null;
+  const fav = dom && typeof favicon === "function" ? favicon("https://" + dom) : null;
+  return fav ? `<img src="${escHtml(fav)}" alt="" loading="lazy">` : escHtml((site[0] || "?").toUpperCase());
+}
+
+// crisp icon buttons shared by the entry rows
+const VEYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const VX = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+
 function passwordRow(e) {
   return `
     <div class="ventry" data-id="${e.id}">
-      <div class="ve-ico">${escHtml((e.site[0] || "?").toUpperCase())}</div>
+      <div class="ve-ico">${vaultIcon(e.site)}</div>
       <div class="ve-body">
         <div class="ve-site">${escHtml(e.site)} <span class="ve-badges" id="bdg-${e.id}"></span></div>
         <div class="ve-user">${escHtml(e.username || "—")}</div>
       </div>
       <div class="ve-pw" id="pw-${e.id}">••••••••</div>
       <div class="ve-actions">
-        <button class="ve-reveal" data-id="${e.id}" title="show / copy">👁</button>
-        <button class="ve-del" data-id="${e.id}" title="delete">✕</button>
+        <button class="ve-reveal" data-id="${e.id}" title="show / copy">${VEYE}</button>
+        <button class="ve-del" data-id="${e.id}" title="delete">${VX}</button>
       </div>
     </div>`;
 }
 
 function renderPasswords() {
   const el = document.getElementById("vSecBody");
-  const list = VAULT.entries.filter((e) => e.hasPassword);
+  const all = VAULT.entries.filter((e) => e.hasPassword);
+
+  // filter by search + the active breakdown filter
+  let list = all;
+  if (VAULT.q) list = list.filter((e) => (e.site + " " + (e.username || "")).toLowerCase().includes(VAULT.q));
+  if (VAULT.filter !== "all" && VAULT.health) {
+    const byId = VAULT.health.byId;
+    list = VAULT.filter === "strong"
+      ? list.filter((e) => !(byId[e.id] || []).length)
+      : list.filter((e) => (byId[e.id] || []).includes(VAULT.filter));
+  }
+
   const rows = list.length ? list.map(passwordRow).join("")
-    : `<div class="vault-msg">no logins yet — hit “＋ add login”, or log in somewhere and let the browser offer to save</div>`;
+    : `<div class="vault-msg">${VAULT.q || VAULT.filter !== "all" ? "nothing matches" : "no logins yet — hit “＋ add login”, or log in somewhere and let the browser offer to save"}</div>`;
+
   el.innerHTML = `
-    <div class="vault-topbar">
-      <button id="vAddToggle" class="vault-mini">＋ add login</button>
-      <span class="vt-health" id="vHealth"></span>
-      <button id="vImport" class="vault-ghostbtn">import CSV</button>
-    </div>
-    <div class="vault-add ${VAULT.addOpen ? "" : "hidden"}" id="vAddForm">
-      <input id="vaSite" class="vault-input sm" placeholder="site (e.g. GitHub)" />
-      <input id="vaUser" class="vault-input sm" placeholder="username / email" />
-      <input id="vaPass" type="password" class="vault-input sm" placeholder="password" />
-      <input id="vaUrl" class="vault-input sm" placeholder="url (optional)" />
-      <button id="vaAdd" class="vault-btn sm">save login</button>
-    </div>
-    <div class="vault-scroll"><div class="vault-list">${rows}</div></div>`;
+    <div class="vgrid">
+      <div class="vmain">
+        <div class="vault-topbar">
+          <button id="vAddToggle" class="vault-mini">＋ add login</button>
+          <input id="vSearch" class="vault-search" placeholder="search ${all.length} logins…" value="${escHtml(VAULT.q)}" />
+          <button id="vImport" class="vault-ghostbtn">import CSV</button>
+        </div>
+        <div class="vault-add ${VAULT.addOpen ? "" : "hidden"}" id="vAddForm">
+          <input id="vaSite" class="vault-input sm" placeholder="site (e.g. GitHub)" />
+          <input id="vaUser" class="vault-input sm" placeholder="username / email" />
+          <input id="vaPass" type="password" class="vault-input sm" placeholder="password" />
+          <input id="vaUrl" class="vault-input sm" placeholder="url (optional)" />
+          <button id="vaAdd" class="vault-btn sm">save login</button>
+        </div>
+        <div class="vault-scroll"><div class="vault-list">${rows}</div></div>
+      </div>
+      <aside class="vside">${sidebarHtml(all)}</aside>
+    </div>`;
 
   document.getElementById("vAddToggle").addEventListener("click", () => {
     VAULT.addOpen = !VAULT.addOpen; renderPasswords();
@@ -396,9 +430,131 @@ function renderPasswords() {
   document.getElementById("vImport").addEventListener("click", importCSV);
   const add = document.getElementById("vaAdd");
   if (add) add.addEventListener("click", addEntry);
+
+  const search = document.getElementById("vSearch");
+  search.addEventListener("input", () => {
+    VAULT.q = search.value.trim().toLowerCase();
+    const pos = search.selectionStart;
+    renderPasswords();
+    const s2 = document.getElementById("vSearch"); s2.focus(); try { s2.setSelectionRange(pos, pos); } catch {}
+  });
+
   el.querySelectorAll(".ve-reveal").forEach((b) => b.addEventListener("click", () => revealPw(b.dataset.id)));
   el.querySelectorAll(".ve-del").forEach((b) => b.addEventListener("click", () => delEntry(b.dataset.id)));
-  loadHealth();
+
+  // health fills the badges, risk strips, security ring + breakdown
+  ensureHealth().then((h) => {
+    if (VAULT.section !== "passwords") return;
+    applyHealth();
+    fillSecurityCard(all, h);
+  });
+}
+
+/* the right-hand insight sidebar (health card fills in async) */
+function sidebarHtml(all) {
+  const withTotp = all.filter((e) => e.hasTotp).length;
+  const cov = all.length ? Math.round((withTotp / all.length) * 100) : 0;
+
+  const usedRows = miniList(all.filter((e) => e.lastUsed > 0).sort((a, b) => b.lastUsed - a.lastUsed).slice(0, 5),
+    (e) => relTime(e.lastUsed), "nothing revealed yet");
+  const savedRows = miniList([...all].sort((a, b) => (b.added || 0) - (a.added || 0)).slice(0, 5),
+    (e) => relTime(e.added), "—");
+
+  return `
+    <div class="vcard vsec-card">
+      <div class="vring" id="vRing">
+        <svg width="92" height="92" viewBox="0 0 92 92">
+          <circle class="vring-track" cx="46" cy="46" r="40" fill="none" stroke-width="8"/>
+          <circle class="vring-fill" id="vRingFill" cx="46" cy="46" r="40" fill="none" stroke-width="8"
+                  stroke="var(--accent)" stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+        </svg>
+        <div class="vring-num" id="vRingNum">—</div>
+      </div>
+      <div class="vsec-meta">
+        <div class="vsec-verdict" id="vVerdict">scanning…</div>
+        <div class="vsec-sub" id="vVerdictSub">checking password strength</div>
+      </div>
+    </div>
+
+    <div class="vcard">
+      <div class="vcard-h">breakdown</div>
+      <div class="vbd" id="vBreakdown">
+        <button class="vbd-row ${VAULT.filter === "all" ? "on" : ""}" data-f="all"><span class="vbd-dot all"></span><span class="vbd-label">all</span><span class="vbd-n">${all.length}</span></button>
+        <button class="vbd-row ${VAULT.filter === "strong" ? "on" : ""}" data-f="strong"><span class="vbd-dot strong"></span><span class="vbd-label">strong</span><span class="vbd-n" id="bdStrong">—</span></button>
+        <button class="vbd-row ${VAULT.filter === "weak" ? "on" : ""}" data-f="weak"><span class="vbd-dot weak"></span><span class="vbd-label">weak</span><span class="vbd-n" id="bdWeak">—</span></button>
+        <button class="vbd-row ${VAULT.filter === "reused" ? "on" : ""}" data-f="reused"><span class="vbd-dot reused"></span><span class="vbd-label">reused</span><span class="vbd-n" id="bdReused">—</span></button>
+        <button class="vbd-row ${VAULT.filter === "old" ? "on" : ""}" data-f="old"><span class="vbd-dot old"></span><span class="vbd-label">old</span><span class="vbd-n" id="bdOld">—</span></button>
+      </div>
+    </div>
+
+    <div class="vcard">
+      <div class="vcard-h">2FA coverage</div>
+      <div class="vcov-bar"><div class="vcov-fill" style="width:${cov}%"></div></div>
+      <div class="vcov-txt"><b>${withTotp}</b> of <b>${all.length}</b> logins protected</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vcard-h">recently used</div>
+      <div class="vmini" id="vUsed">${usedRows}</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vcard-h">recently saved</div>
+      <div class="vmini">${savedRows}</div>
+    </div>`;
+}
+
+function miniList(items, timeFn, empty) {
+  if (!items.length) return `<div class="vmini-empty">${empty}</div>`;
+  return items.map((e) => `
+    <div class="vmini-row" data-id="${e.id}" title="${escHtml(e.username || e.site)}">
+      <div class="vmini-ico">${vaultIcon(e.site)}</div>
+      <div class="vmini-body">
+        <div class="vmini-site">${escHtml(e.site)}</div>
+        <div class="vmini-time">${escHtml(e.username || "—")}</div>
+      </div>
+      <div class="vmini-time">${timeFn(e)}</div>
+    </div>`).join("");
+}
+
+/* colour the entry badges + left risk strips from cached health */
+function applyHealth() {
+  const h = VAULT.health;
+  if (!h) return;
+  document.querySelectorAll(".ventry").forEach((row) => {
+    const issues = h.byId[row.dataset.id] || [];
+    const b = document.getElementById("bdg-" + row.dataset.id);
+    if (b) b.innerHTML = issues.map((x) => `<span class="vbadge ${x}">${x}</span>`).join("");
+    row.classList.remove("risk-weak", "risk-reused");
+    if (issues.includes("weak")) row.classList.add("risk-weak");
+    else if (issues.includes("reused")) row.classList.add("risk-reused");
+  });
+}
+
+/* the security ring + breakdown counts */
+function fillSecurityCard(all, h) {
+  if (!h) return;
+  const total = all.length;
+  const atRisk = Object.values(h.byId).filter((iss) => iss.length).length;
+  const strong = Math.max(0, total - atRisk);
+  const score = total ? Math.round((strong / total) * 100) : 100;
+  const lvl = score >= 80 ? "good" : score >= 50 ? "warn" : "bad";
+  const col = lvl === "good" ? "#57e39a" : lvl === "warn" ? "#ffc169" : "#ff6b6b";
+
+  const fill = document.getElementById("vRingFill");
+  if (fill) { fill.style.strokeDashoffset = 251.3 * (1 - score / 100); fill.style.stroke = col; }
+  const num = document.getElementById("vRingNum");
+  if (num) { num.innerHTML = score + "<small>%</small>"; num.style.color = col; }
+  const v = document.getElementById("vVerdict");
+  if (v) v.textContent = lvl === "good" ? "well protected" : lvl === "warn" ? "needs attention" : "at risk";
+  const vs = document.getElementById("vVerdictSub");
+  if (vs) vs.textContent = atRisk ? `${strong} strong · ${atRisk} to fix` : "everything looks healthy";
+
+  const setN = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  setN("bdStrong", strong); setN("bdWeak", h.weak); setN("bdReused", h.reused); setN("bdOld", h.old);
+
+  document.querySelectorAll("#vBreakdown .vbd-row").forEach((btn) =>
+    btn.addEventListener("click", () => { VAULT.filter = btn.dataset.f; renderPasswords(); }));
 }
 
 function otpRow(e) {
@@ -562,7 +718,19 @@ async function revealPw(id) {
     el.textContent = pw;
     el.dataset.shown = "1";
     try { await navigator.clipboard.writeText(pw); toast("password copied"); } catch {}
+    // record the use locally so "recently used" updates instantly
+    const ent = VAULT.entries.find((x) => x.id === id);
+    if (ent) { ent.lastUsed = Date.now(); refreshRecentlyUsed(); }
   } catch {}
+}
+
+function refreshRecentlyUsed() {
+  const el = document.getElementById("vUsed");
+  if (!el) return;
+  const all = VAULT.entries.filter((e) => e.hasPassword);
+  el.innerHTML = miniList(
+    all.filter((e) => e.lastUsed > 0).sort((a, b) => b.lastUsed - a.lastUsed).slice(0, 5),
+    (e) => relTime(e.lastUsed), "nothing revealed yet");
 }
 
 async function delEntry(id) {
