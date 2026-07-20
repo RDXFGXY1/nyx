@@ -1,5 +1,13 @@
 {
-  "version": "2.0.1",
-  "notes": "Testing the update banner",
+  "version": "1.4.0",
+  "notes": "Bookmarks, translation, smarter search, and a vault security dashboard.",
+  "items": [
+    "Real bookmarks — the saved tab now browses your actual browser bookmarks, folders and all",
+    "Translation — select text to translate inline, or open the full translator with Alt+G",
+    "Smarter search — the bar now suggests from your history and bookmarks, like the address bar",
+    "Vault security dashboard — a score ring, weak/reused breakdown, 2FA coverage, and recently used/saved",
+    "Display settings — size (S/M/L), bold text, board width, and open-links-in-new-tab",
+    "What's-new popup + built-in update notifications"
+  ],
   "url": "https://github.com/RDXFGXY1/nyx/releases"
 }
