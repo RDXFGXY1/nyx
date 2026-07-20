@@ -24,6 +24,10 @@ coverage/
 # .NET backend build outputs
 backend/src
 desktop/
+
+# packaged build output (binaries, appsettings, phone code, screentime — never commit)
+backend-build/
+desktop-package/
 backend/**/bin/
 backend/**/obj/
 backend/.vs/

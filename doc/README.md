@@ -12,7 +12,7 @@ It started as a link dashboard and grew into a small personal browser OS.
 
 | Part | What it is | Needed for |
 |------|------------|-----------|
-| **Extension** (`index.html`, `css/`, `js/`) | The new-tab page. Pure browser, no install beyond loading it. | Links, tabs, folders, command mode, dashboard, wallpaper, notes/to-do/snippets, stash, launcher, pet. |
+| **Extension** (`index.html`, `css/`, `js/`) | The new-tab page. Pure browser, no install beyond loading it. | Links, tabs, folders, command mode, dashboard, wallpaper, notes/to-do/snippets, bookmarks, translation, history-aware search, pet. |
 | **Backend** (`backend/`) | A local ASP.NET Core server on `http://127.0.0.1:5055`. | Music (local + online), real system stats, screen-time, password **vault**, **Discord RPC**, **phone companion**, PC control. |
 
 The extension works fully on its own. The backend adds the "superpowers" and is
@@ -55,11 +55,14 @@ It serves on `http://127.0.0.1:5055`. First run restores NuGet packages. See
 
 - **Links** — grouped, foldable cards across custom tabs; favicons; edit mode; copy-link.
 - **Command mode** — type `>` in the search bar for 30+ commands. See [COMMANDS.md](COMMANDS.md).
-- **Launcher** — type in the search bar to fuzzy-jump to any saved link.
+- **Launcher** — type in the search bar to fuzzy-jump to saved links, **bookmarks, and history** (address-bar-style suggestions).
+- **Bookmarks** (`Alt+S`) — browse your real browser bookmarks (folders, breadcrumb, search); save from any page via the selection pill or right-click.
+- **Translation** — select text on any page to translate inline, a full translator panel (`Alt+G`), and a `>translate` command.
 - **Dashboard** (`Alt+D`) — weather, profile, calendar, sliders, **music player**, **live system monitor**, **screen-time**.
 - **Side panel** (`Alt+N`) — Notes, To-do, Snippets (text expander), Sent history.
-- **Stash** (`Alt+S`) — save anything from any page (hover card / right-click), with categories.
-- **Vault** (`Alt+P`) — encrypted password manager: logins, 2FA codes, identities, cards. See [VAULT.md](VAULT.md).
+- **Vault** (`Alt+P`) — encrypted password manager with a **security dashboard** (score, weak/reused breakdown, 2FA coverage, recently used/saved). See [VAULT.md](VAULT.md).
+- **Display settings** — text size, weight, board width, open-links-in-new-tab.
+- **Updates** — a what's-new popup after installing, and backend-free update notifications via a `version.json` in the repo.
 - **Phone companion** (`>phone`) — QR-pair your phone, send links/text both ways over WiFi.
 - **Music** — local files, the backend's `~/Music` library, and online search (yt-dlp), with a queue.
 - **Auto-DJ** — music plays on coding sites, pauses on video sites.
