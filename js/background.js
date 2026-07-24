@@ -6,6 +6,9 @@
    so the new-tab Stash board sees it instantly.
    ========================================================= */
 
+importScripts("typingEngine.js");  // typing assistant: dictionary + suggestions
+importScripts("grammarEngine.js"); // grammar fix (LanguageTool) + AI rewrite
+
 const RPC_ENDPOINTS = [
   "http://127.0.0.1:5055/api/rpc/activity",
   "http://localhost:5055/api/rpc/activity"
