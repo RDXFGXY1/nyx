@@ -9,13 +9,13 @@
    ========================================================= */
 
 const WHATS_NEW = {
-  version: "1.4.0",
+  version: "1.5.0",
   items: [
-    { icon: "🔖", title: "Real bookmarks", desc: "The saved tab now browses your actual browser bookmarks — folders and all, nothing ever wiped." },
-    { icon: "🌐", title: "Translation", desc: "Select text on any page to translate it inline, or open the full translator with Alt+G." },
-    { icon: "🔎", title: "Smarter search", desc: "The search bar now suggests from your history and bookmarks, just like the address bar." },
-    { icon: "🎛️", title: "Display settings", desc: "New in settings: size (S/M/L), bold text, board width, and open-links-in-new-tab." },
-    { icon: "🔐", title: "Vault dashboard", desc: "A security-score ring, weak/reused breakdown, 2FA coverage, and recently used / saved." },
+    { icon: "⌨️", title: "Typing assistant", desc: "Autocomplete and spelling fixes in any text box, on any site. Turn it on with >typing — local dictionary (offline) or online." },
+    { icon: "✓", title: "Grammar fixes", desc: "Free grammar checking as you type via >grammar — a popup of fixes, or auto-write mode that applies them for you." },
+    { icon: "✦", title: "AI rewrite", desc: "Press Alt+R to fix or polish any text with your own AI key (Groq, Gemini, Claude, Ollama and more). Right-click the button for tone presets." },
+    { icon: "↩️", title: "Reply & summarize", desc: "Alt+A drafts a reply to a selected message; Alt+W summarizes the whole page. Plus a personal dictionary and typing stats." },
+    { icon: "⬇️", title: "One-line installer", desc: "Install or update Nyx from the terminal on Windows, Linux and macOS — no backend, and your settings are never touched." },
   ],
 };
 

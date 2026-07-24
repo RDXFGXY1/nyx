@@ -5,6 +5,44 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.5.0] — 2026-07-24
+
+### Added
+- **Typing assistant** (`>typing`) — autocomplete and spelling correction in any
+  text box, on any site. A caret-following popup completes words and fixes typos;
+  **Tab** accepts, **↑/↓** pick, **Esc** dismisses. Two modes: **local** downloads
+  a ~50k-word frequency dictionary per language once and then works fully offline
+  (`>typing local fr`), while **online** uses the Datamuse API (English). New files
+  `js/typing.js` (content script) and `js/typingEngine.js` (service worker).
+- **Grammar fixes** (`>grammar`) — free grammar/spelling checking as you type via
+  LanguageTool (no key, many languages). Fixes appear in a popup, or **auto-write**
+  mode (`>grammar auto`) applies them silently. Contenteditable-safe (only the
+  caret's text node is touched, so rich editors like Gmail keep their formatting).
+- **AI rewrite** — **Alt+R** fixes and **Shift+Alt+R** polishes the current text
+  box with your own AI provider: `groq`, `openai`, `gemini`, `claude`, `deepseek`,
+  `grok`, `kimi`, `qwen`, or local `ollama`. Right-click the ✦ button for tone
+  presets (formal / casual / shorter). Configure with `>ai <provider>` / `>ai key`.
+  Keys live in the background service worker only — pages never see them.
+- **AI reply helper** (**Alt+A** / `>reply`) drafts a reply to a selected message,
+  and a **page summarizer** (**Alt+W**) gives a TL;DR plus bullets.
+- **Personal dictionary** (`>dict`, or the `＋` in the grammar popup) — words you
+  add are never flagged again by either engine and feed autocomplete.
+- **Typing stats** panel (`>typing stats`) and an optional AI line in the daily
+  briefing. New files `js/grammar.js`, `js/grammarEngine.js`, `js/summarize.js`.
+- **One-line installer / updater** — `install.ps1` (Windows) and `install.sh`
+  (Linux/macOS). The same command installs and updates; updates happen **in place**
+  so the unpacked extension keeps its ID and all browser-profile data, `js/config.js`
+  is never overwritten, and the previous build is backed up. Animated Tokyo-night
+  UI that degrades to plain text when piped.
+
+### Changed
+- `manifest.json` reconciled to 1.5.0; registers the new content scripts and the
+  AI/grammar host permissions. `js/background.js` loads the two engines via
+  `importScripts`; `index.html` loads the new-tab scripts. `js/whatsnew.js` and
+  `version.json` updated for the release.
+
+---
+
 ## [1.4.0] — 2026-07-20
 
 ### Added
