@@ -527,7 +527,10 @@ body {
 .link .dot { background: var(--accent); color: var(--accent-ink); }
 .link:hover { background: var(--accent-soft); }
 .search:focus-within { border-color: var(--accent); }
-.group:hover { border-color: var(--accent); }
+/* gentle accent tint on hover — full --accent read like an error outline
+   with saturated accents (color-mix falls back gracefully to --border-hot) */
+.group:hover { border-color: var(--border-hot); }
+.group:hover { border-color: color-mix(in srgb, var(--accent) 42%, transparent); }
 .weather .temp { color: var(--accent); }
 
 /* =========================================================
