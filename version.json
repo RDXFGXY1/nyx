@@ -1,12 +1,12 @@
 {
-  "version": "1.4.0",
-  "notes": "Bookmarks browser, translation, history-aware search, and a vault security dashboard.",
+  "version": "1.5.0",
+  "notes": "A writing-assistance layer — typing assistant, grammar fixes and AI rewrite in any text box — plus a one-line installer/updater.",
   "items": [
-    "Real bookmarks browser — folders and all, nothing wiped",
-    "Translate any selected text, plus a full translator (Alt+G)",
-    "Search bar now suggests from your history and bookmarks",
-    "Vault security dashboard — score, weak/reused breakdown, 2FA coverage",
-    "Display settings: size, weight, board width, open-in-new-tab"
+    "Typing assistant — autocomplete and spelling fixes in any text box (>typing)",
+    "Grammar fixes as you type — free, no key, many languages (>grammar)",
+    "AI rewrite with your own key — Groq, Gemini, Claude, Ollama and more (Alt+R)",
+    "AI reply drafts (Alt+A) and one-key page summaries (Alt+W)",
+    "One-line installer & updater for Windows, Linux and macOS"
   ],
   "url": "https://github.com/RDXFGXY1/nyx/releases"
 }
