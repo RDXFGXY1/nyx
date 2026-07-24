@@ -62,6 +62,79 @@ Click the **clock** in the top bar for a quick calendar popover.
   any text box on any site and it expands.
 - **Sent** — history of everything sent to/from your phone (see Phone).
 
+Everything below can also be set up in **settings** (the gear, top-right) —
+the **writing assistant** and **AI writing** groups hold every toggle, the
+dictionary language + download button, your provider and API key with a
+**test** button, your personal dictionary as removable chips, and a shortcut
+to the stats panel. The `>` commands stay as the fast path.
+
+## Typing assistant — `>typing`
+
+Autocomplete and spelling correction while you type in any text box, on any
+site (and in the new-tab notes/to-do boxes). A small popup follows your caret:
+**↑/↓** pick, **Tab** accepts, **Esc** dismisses. Rows marked `fix` are
+spelling corrections; `→` rows are completions.
+
+Two engines:
+
+- **Local** — `>typing local fr` downloads a ~50,000-word frequency dictionary
+  for your language once (stored in the extension), then everything works
+  offline and instantly. Any language code from
+  [FrequencyWords](https://github.com/hermitdave/FrequencyWords) works
+  (`en`, `fr`, `ar`, `es`, `de`, …).
+- **Online** — `>typing online` fetches suggestions as you type (Datamuse,
+  English). No download, needs internet.
+
+Off by default; `>typing` toggles it. `>typing status` shows the current
+mode, language, and dictionary size.
+
+## Grammar & AI rewrite — `>grammar` / `>ai`
+
+The grammar layer on top of the typing assistant:
+
+- **Online grammar fix** — `>grammar`: when you pause typing, the text box is
+  checked with LanguageTool (free, no key, many languages). A popup lists each
+  fix (~~wrong~~ → right); click one, or "apply all".
+- **Auto-write** — `>grammar auto`: fixes are applied silently as you type —
+  no popup, just a small "fixed N things" flash.
+- **AI rewrite** — a floating **✦ button** appears on any text box you type in:
+  one click and your own AI fixes the whole text in place (Shift-click polishes
+  it for clarity, not just correctness; `Alt+R` / `Shift+Alt+R` do the same
+  from the keyboard; `>ai button` hides the button). Works with `groq`, `openai`, `gemini`, `claude`, `deepseek`,
+  `grok`, `kimi`, `qwen`, or a local `ollama` (no key). Setup:
+  `>ai groq` → `>ai key <your-key>` → `>ai test`.
+
+Your API key stays in extension storage and is only used by the background
+worker — pages and content scripts never see it. Note: grammar checking sends
+the text of the box to languagetool.org, and the AI features send text to the
+AI provider you chose — that's inherent to how they work.
+
+More AI helpers (same provider setup):
+
+- **Tone presets** — right-click the ✦ button for a menu: fix / polish /
+  formal / casual / shorter. Also `>rewrite formal <text>` from the search bar.
+- **Reply helper** — select a message someone sent you (email, chat, comment)
+  and press **Alt+A**: a draft reply appears next to it, one click to copy.
+  Or `>reply <their message>` from the search bar.
+- **Page summarizer** — **Alt+W** on any page: TL;DR + bullet points in the
+  page's language, with a copy button.
+- **Smart daily briefing** — when an AI provider is configured, the once-a-day
+  briefing card opens with one warm AI-written line about your day.
+
+## Personal dictionary — `>dict`
+
+Words the spell-checker keeps flagging that are actually fine (names, slang,
+Darija…): add them once and they're never flagged again — by the typing
+assistant *or* the grammar checker — and they show up in autocomplete.
+`>dict add <word>` / `del <word>` / `list` / `clear`, or click the **＋** next
+to any fix in the grammar popup ("that word is fine").
+
+## Typing stats — `>typing stats`
+
+A small panel: words typed today, completions accepted, grammar fixes, AI
+rewrites (each with 7-day totals), and your most-fixed mistakes of the week.
+Counting happens locally; stats never leave the extension.
+
 ## Stash — `Alt+S`
 
 Save things you find, from anywhere:

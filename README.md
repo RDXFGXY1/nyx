@@ -26,11 +26,48 @@ Main features
 - Built-in update notifications — no server needed (see "Updates" below)
 
 Installation
+
+One line in a terminal — no backend, no build step. The same command installs
+and updates.
+
+Windows (PowerShell):
+
+    irm https://raw.githubusercontent.com/RDXFGXY1/nyx/main/install.ps1 | iex
+
+Linux / macOS:
+
+    curl -fsSL https://raw.githubusercontent.com/RDXFGXY1/nyx/main/install.sh | sh
+
+On a first run it downloads the extension and tells you the folder to point
+"Load unpacked" at. On later runs it finds your existing install and swaps the
+old files for the new ones.
+
+Manual install, if you prefer:
 1. Copy or unzip this folder somewhere permanent (or clone this repo).
 2. Open brave://extensions (or chrome://extensions).
 3. Turn on Developer mode.
 4. Click Load unpacked and select this project folder.
 5. Open a new tab to start using the extension.
+
+Updating
+Run the same one-liner again, then click the reload arrow on nyx in
+brave://extensions. Your data is safe: settings, links, notes, stash, vault,
+dictionaries and stats live in the browser profile, not in the extension
+folder — and an unpacked extension keeps its identity as long as its folder
+path doesn't change, so the updater always writes in place and never moves or
+renames the folder. `js/config.js` (your personal links) is never overwritten;
+if a release changes the default it lands beside it as `js/config.new.js`.
+The previous code is zipped to a backups folder first (last 3 kept).
+
+The installer shows a Tokyo-night neon banner, a live download counter, and a
+progress bar (color + animation on a real terminal; it degrades to plain text
+when piped to a file).
+
+Updater options (environment variables):
+- `NYX_DIR` — install to / update a specific folder
+- `NYX_REF` — install from a branch or tag other than `main`
+- `NYX_SRC` — install from a local .zip or folder instead of downloading
+- `NYX_PLAIN=1` — disable color/animation · `NYX_ANIM=1` — force it on when piping
 
 Customize your experience
 Edit js/config.js to change:

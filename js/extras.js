@@ -682,6 +682,24 @@ async function buildBriefing() {
   el.classList.remove("hidden");
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.add("hidden"), 13000);
+
+  // one warm AI line on top, if an AI provider is configured (>ai) —
+  // arrives a moment later; skipped silently when there's no key
+  try {
+    const ctx =
+      `name: ${(typeof SETTINGS !== "undefined" && SETTINGS.name) || "-"} · ${greet}\n` +
+      lines.map((l) => l.t + (l.s ? " (" + l.s + ")" : "")).join("\n");
+    chrome.runtime.sendMessage({ type: "ai-brief", context: ctx }, (resp) => {
+      if (chrome.runtime.lastError || !resp || !resp.ok || !resp.text) return;
+      if (el.classList.contains("hidden")) return; // card already gone
+      const div = document.createElement("div");
+      div.className = "brief-row";
+      div.innerHTML = `<span class="brief-ico">✦</span><div class="brief-txt"><div class="brief-t">${escHtml(resp.text)}</div></div>`;
+      document.getElementById("briefLines").prepend(div);
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.add("hidden"), 13000); // give time to read it
+    });
+  } catch {}
 }
 
 function setupBriefing() {

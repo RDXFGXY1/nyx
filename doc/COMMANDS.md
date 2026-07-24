@@ -50,6 +50,38 @@ completes, **Enter** runs, **Esc** closes. `>help` lists everything.
 | `>save Dune 2` | Quick-save text/link to the stash. |
 | `>vault` | Open the password vault. |
 
+### Typing assistant
+| Command | Does |
+|---------|------|
+| `>typing` | Toggle the typing assistant (autocomplete + spelling fixes in any text box, on any site). |
+| `>typing local fr` | Local mode: downloads a ~50k-word dictionary for that language (once), then suggests offline. |
+| `>typing online` | Online mode: fetches suggestions as you type (English, no download). |
+| `>typing lang ar` | Change the dictionary language (downloads it if missing). |
+| `>typing dl` | Re-download the current language's dictionary. |
+| `>typing status` | Show mode, language, and dictionary size. |
+
+### Grammar & AI rewrite
+| Command | Does |
+|---------|------|
+| `>grammar` | Toggle grammar checking (LanguageTool, free, no key). Fixes show in a popup when you pause typing. |
+| `>grammar auto` | Auto-write: grammar fixes are applied automatically as you type. |
+| `>grammar lang fr` | Force the grammar language (default `auto`). |
+| `>ai groq` | Pick your AI provider: `groq`, `openai`, `gemini`, `claude`, `deepseek`, `grok`, `kimi`, `qwen`, `ollama`. |
+| `>ai key <key>` | Save your API key (kept in extension storage, used only by the background worker). |
+| `>ai model <name>` | Override the provider's default model. |
+| `>ai test` | Send a test sentence and show the fixed reply. |
+| `>rewrite <text>` | AI-fix a sentence right from the search bar (result copied). |
+
+| `>ai button` | Toggle the floating ✦ button that appears on any text box — one click = AI-fix the text. |
+| `>rewrite formal <text>` | Rewrite with a tone: `formal`, `casual`, `shorter`, `polish`. |
+| `>reply <their message>` | AI drafts the reply you could send back (result copied). |
+| `>dict add <word>` | Personal dictionary — the word is never flagged again and autocompletes. Also `del <word>`, `list`, `clear`, or the `＋` in the grammar popup. |
+| `>typing stats` | Panel with words typed, completions, grammar fixes, AI rewrites, and your most-fixed mistakes. |
+
+**In any text box, on any site:** click the **✦ button** (or `Alt+R`) = AI-fix the text · Shift-click (or `Shift+Alt+R`) = AI-polish it ·
+**right-click the ✦ button** = tone menu (fix / polish / formal / casual / shorter).
+**Anywhere on a page:** `Alt+A` with text selected = AI drafts a reply to it · `Alt+W` = AI summary of the page.
+
 ### System & devices
 | Command | Does |
 |---------|------|
